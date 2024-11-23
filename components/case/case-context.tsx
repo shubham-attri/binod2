@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, useEffect } from "react";
+import { createContext, useContext, useState } from "react";
 
 interface Case {
   id: string;
@@ -8,45 +8,62 @@ interface Case {
   clientName: string;
   status: "active" | "pending" | "closed";
   lastUpdated: Date;
+  description: string;
+  tags?: string[];
+  priority: "high" | "medium" | "low";
 }
 
 interface CaseContextType {
   cases: Case[];
   selectedCase: Case | null;
   setSelectedCase: (case_: Case | null) => void;
-  createCase: (caseData: Omit<Case, "id" | "lastUpdated">) => void;
-  updateCase: (id: string, caseData: Partial<Case>) => void;
+  addCase: (case_: Omit<Case, "id" | "lastUpdated">) => void;
+  updateCase: (id: string, updates: Partial<Case>) => void;
+  deleteCase: (id: string) => void;
 }
 
 const CaseContext = createContext<CaseContextType | undefined>(undefined);
 
 export function CaseProvider({ children }: { children: React.ReactNode }) {
-  const [cases, setCases] = useState<Case[]>([]);
+  const [cases, setCases] = useState<Case[]>([
+    {
+      id: "1",
+      title: "Smith vs. Jones",
+      clientName: "John Smith",
+      status: "active",
+      lastUpdated: new Date(),
+      description: "Contract dispute case",
+      tags: ["Contract", "Dispute"],
+      priority: "high",
+    },
+  ]);
   const [selectedCase, setSelectedCase] = useState<Case | null>(null);
 
-  const createCase = (caseData: Omit<Case, "id" | "lastUpdated">) => {
-    const newCase: Case = {
-      ...caseData,
-      id: Date.now().toString(), // In production, this would come from the backend
+  const addCase = (newCase: Omit<Case, "id" | "lastUpdated">) => {
+    const case_: Case = {
+      ...newCase,
+      id: Date.now().toString(),
       lastUpdated: new Date(),
     };
-    setCases((prev) => [...prev, newCase]);
+    setCases(prev => [...prev, case_]);
   };
 
-  const updateCase = (id: string, caseData: Partial<Case>) => {
-    setCases((prev) =>
-      prev.map((case_) =>
+  const updateCase = (id: string, updates: Partial<Case>) => {
+    setCases(prev =>
+      prev.map(case_ =>
         case_.id === id
-          ? { ...case_, ...caseData, lastUpdated: new Date() }
+          ? { ...case_, ...updates, lastUpdated: new Date() }
           : case_
       )
     );
   };
 
-  // In a real app, we'd fetch cases from an API here
-  useEffect(() => {
-    // TODO: Implement API call to fetch cases
-  }, []);
+  const deleteCase = (id: string) => {
+    setCases(prev => prev.filter(case_ => case_.id !== id));
+    if (selectedCase?.id === id) {
+      setSelectedCase(null);
+    }
+  };
 
   return (
     <CaseContext.Provider
@@ -54,8 +71,9 @@ export function CaseProvider({ children }: { children: React.ReactNode }) {
         cases,
         selectedCase,
         setSelectedCase,
-        createCase,
+        addCase,
         updateCase,
+        deleteCase,
       }}
     >
       {children}

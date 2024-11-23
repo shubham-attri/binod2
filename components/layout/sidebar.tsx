@@ -13,7 +13,7 @@ import {
   Briefcase,
   PanelLeftClose,
   PanelLeftOpen,
-  Bot,
+  ZapIcon,
 } from "lucide-react";
 import {
   Collapsible,
@@ -25,6 +25,7 @@ import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
+import { getThreads } from "@/lib/chat-service";
 
 interface SidebarProps {
   isCollapsed: boolean;
@@ -40,17 +41,11 @@ export function Sidebar({ isCollapsed, onCollapsedChange, currentMode }: Sidebar
 
   const isActive = (path: string) => pathname === path;
 
-  const handlePlaygroundClick = (e: React.MouseEvent) => {
-    e.preventDefault();
-    router.push('/');
-  };
-
-  const recentChats = [
-    { id: "1", title: "Contract Review", timestamp: new Date() },
-    { id: "2", title: "Legal Research", timestamp: new Date() },
-    { id: "3", title: "Case Analysis", timestamp: new Date() },
-    { id: "4", title: "Document Draft", timestamp: new Date() },
-  ];
+  const recentChats = getThreads().slice(0, 4).map(thread => ({
+    id: thread.id,
+    title: thread.title,
+    timestamp: thread.createdAt
+  }));
 
   return (
     <div
@@ -67,61 +62,76 @@ export function Sidebar({ isCollapsed, onCollapsedChange, currentMode }: Sidebar
             isCollapsed ? "justify-center" : "justify-start px-4",
             pathname === "/" && "bg-accent"
           )}
-          onClick={handlePlaygroundClick}
+          onClick={() => router.push('/')}
         >
-          <Bot className="h-6 w-6" />
+          <ZapIcon className="h-6 w-6 " />
           {!isCollapsed && <span className="ml-2 font-semibold">Legal AI</span>}
         </Button>
       </div>
 
       <ScrollArea className="flex-1 px-3">
         <div className="space-y-4 py-4">
-          <div className="space-y-1">
-            <Button
-              variant="ghost"
-              className={cn(
-                "w-full justify-start",
-                isCollapsed && "justify-center",
-                currentMode === "playground" && "bg-accent"
-              )}
-              onClick={() => router.push('/')}
-            >
-              <Sparkles className="h-5 w-5" />
-              {!isCollapsed && <span className="ml-2">AI Playground</span>}
-            </Button>
+          <Collapsible
+            open={openPlayground}
+            onOpenChange={setOpenPlayground}
+          >
+            <CollapsibleTrigger asChild>
+              <Button
+                variant="ghost"
+                className={cn(
+                  "w-full justify-between",
+                  isCollapsed && "justify-center",
+                  currentMode === "playground" && "bg-accent"
+                )}
+              >
+                <div className="flex items-center gap-2">
+                  <Sparkles className="h-5 w-5 " />
+                  {!isCollapsed && <span>AI Playground</span>}
+                </div>
+                {!isCollapsed && (
+                  <ChevronRight
+                    className={cn(
+                      "h-5 w-5 transition-transform",
+                      openPlayground && "rotate-90"
+                    )}
+                  />
+                )}
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="space-y-1 mt-1">
+              <Button
+                variant="ghost"
+                className={cn(
+                  "w-full justify-start pl-8",
+                  isCollapsed && "justify-center pl-0",
+                  currentMode === "research" && "bg-accent"
+                )}
+                asChild
+              >
+                <Link href="/research">
+                  <MessageSquare className="h-5 w-5" />
+                  {!isCollapsed && <span className="ml-2">Research Mode</span>}
+                </Link>
+              </Button>
 
-            <Button
-              variant="ghost"
-              className={cn(
-                "w-full justify-start pl-8",
-                isCollapsed && "justify-center pl-0",
-                currentMode === "research" && "bg-accent"
-              )}
-              asChild
-            >
-              <Link href="/research">
-                <MessageSquare className="h-5 w-5" />
-                {!isCollapsed && <span className="ml-2">Research Mode</span>}
-              </Link>
-            </Button>
+              <Button
+                variant="ghost"
+                className={cn(
+                  "w-full justify-start pl-8",
+                  isCollapsed && "justify-center pl-0",
+                  currentMode === "case" && "bg-accent"
+                )}
+                asChild
+              >
+                <Link href="/cases">
+                  <Briefcase className="h-5 w-5" />
+                  {!isCollapsed && <span className="ml-2">Case Mode</span>}
+                </Link>
+              </Button>
+            </CollapsibleContent>
+          </Collapsible>
 
-            <Button
-              variant="ghost"
-              className={cn(
-                "w-full justify-start pl-8",
-                isCollapsed && "justify-center pl-0",
-                currentMode === "case" && "bg-accent"
-              )}
-              asChild
-            >
-              <Link href="/cases">
-                <Briefcase className="h-5 w-5" />
-                {!isCollapsed && <span className="ml-2">Case Mode</span>}
-              </Link>
-            </Button>
-          </div>
-
-          <Separator />
+          {/* <Separator /> */}
 
           <Button
             variant="ghost"

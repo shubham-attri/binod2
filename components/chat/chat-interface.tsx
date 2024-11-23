@@ -25,15 +25,17 @@ interface ChatInterfaceProps {
     title: string;
     content: string;
   } | null;
+  initialMessages?: Message[];
 }
 
 export function ChatInterface({ 
   onCreateDocument, 
   onUpdateDocument,
   showCreateDocument,
-  selectedDocument 
+  selectedDocument,
+  initialMessages = []
 }: ChatInterfaceProps) {
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
@@ -47,6 +49,15 @@ export function ChatInterface({
       setMessages(persistedMessages);
     }
   }, []);
+
+  // Initialize with initial messages when they change
+  useEffect(() => {
+    if (initialMessages.length > 0) {
+      setMessages(initialMessages);
+      // Optionally trigger the AI response here
+      handleSend();
+    }
+  }, [initialMessages]);
 
   // Scroll to bottom when new messages arrive
   useEffect(() => {

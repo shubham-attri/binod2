@@ -1,46 +1,42 @@
 "use client";
 
 import { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Sparkles, Search, Briefcase, ArrowRight } from "lucide-react";
+import { Sparkles, Send, Briefcase, ArrowRight, Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
-import { ChatInterface } from "../chat/chat-interface";
+import { CreateCaseDialog } from "../case/create-case-dialog";
+import { createThread } from "@/lib/chat-service";
 
 export function Playground() {
   const router = useRouter();
   const [query, setQuery] = useState("");
-  const [showChat, setShowChat] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (query.trim()) {
-      setShowChat(true);
+      // Create a new thread and store it with the initial query
+      const thread = createThread(query.trim());
+      // Redirect to research mode with the thread ID
+      router.push(`/research/${thread.id}`);
     }
   };
 
-  if (showChat) {
-    return (
-      <div className="h-full">
-        <ChatInterface
-          initialMessages={[
-            {
-              id: Date.now().toString(),
-              role: "user",
-              content: query,
-              createdAt: new Date(),
-            },
-          ]}
-        />
-      </div>
-    );
-  }
+  const handleSuggestionClick = (suggestion: string) => {
+    const thread = createThread(suggestion);
+    router.push(`/research/${thread.id}`);
+  };
+
+  const recentCases = [
+    { id: "1", title: "Smith vs. Jones", type: "Contract Dispute" },
+    { id: "2", title: "Estate Planning", type: "Will & Trust" },
+    { id: "3", title: "Corporate Merger", type: "M&A" },
+  ];
 
   return (
-    <div className="container max-w-3xl mx-auto py-12">
+    <div className="container max-w-5xl mx-auto py-12">
       <div className="text-center mb-12">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -55,42 +51,33 @@ export function Playground() {
         </motion.div>
       </div>
 
-      <div className="space-y-6">
-        {/* Research Mode Card */}
+      <div className="space-y-8">
+        {/* Legal Query Card */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.2 }}
         >
           <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Search className="h-5 w-5" />
-                Research Mode
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-muted-foreground mb-6">
-                Ask questions, conduct legal research, and get AI-powered assistance
-                with document drafting.
-              </p>
+            <CardContent className="p-6">
               <form onSubmit={handleSubmit} className="space-y-4">
-                <Input
-                  placeholder="Ask a legal question..."
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  className="h-12"
-                />
-                <Button type="submit" className="w-full h-12">
-                  Start Research
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
-              </form>
-              <div className="mt-6">
-                <p className="text-sm text-muted-foreground mb-2">
-                  Popular questions:
-                </p>
-                <div className="space-y-2">
+                <div className="relative flex items-center">
+                  <Input
+                    placeholder="Ask a legal question..."
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    className="h-12 pr-24"
+                  />
+                  <Button 
+                    type="submit" 
+                    size="sm" 
+                    className="absolute right-2"
+                  >
+                    <Send className="h-4 w-4 mr-2" />
+                    Send
+                  </Button>
+                </div>
+                <div className="flex gap-2 overflow-x-auto py-2 scrollbar-thin">
                   {[
                     "What are the requirements for a valid contract?",
                     "Explain force majeure clauses",
@@ -98,82 +85,70 @@ export function Playground() {
                   ].map((suggestion) => (
                     <Button
                       key={suggestion}
-                      variant="ghost"
-                      className="w-full justify-start text-left h-auto py-2"
-                      onClick={() => {
-                        setQuery(suggestion);
-                        setShowChat(true);
-                      }}
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleSuggestionClick(suggestion)}
+                      className="whitespace-nowrap"
                     >
                       {suggestion}
                     </Button>
                   ))}
                 </div>
-              </div>
+              </form>
             </CardContent>
           </Card>
         </motion.div>
 
-        {/* Case Mode Card */}
+        {/* Case Management Card */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.4 }}
         >
           <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Briefcase className="h-5 w-5" />
-                Case Mode
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-muted-foreground mb-6">
-                Manage legal cases, track documents, and collaborate with team
-                members on specific matters.
-              </p>
-              <div className="space-y-4">
-                <Button
-                  className="w-full h-12"
-                  onClick={() => router.push("/cases")}
-                >
-                  View Cases
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
-                <div className="relative">
-                  <div className="absolute inset-0 flex items-center">
-                    <span className="w-full border-t" />
-                  </div>
-                  <div className="relative flex justify-center text-xs uppercase">
-                    <span className="bg-background px-2 text-muted-foreground">
-                      Recent Cases
-                    </span>
+            <CardContent className="p-6">
+              <div className="space-y-6">
+                <div>
+                  <p className="text-muted-foreground mb-4">
+                    Access your existing cases or create a new one to manage documents and client information.
+                  </p>
+                  <div className="flex gap-4">
+                    <Button
+                      className="flex-1 h-12"
+                      onClick={() => router.push("/cases")}
+                    >
+                      View All Cases
+                      <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
+                    <CreateCaseDialog>
+                      <Button className="flex-1 h-12">
+                        Create New Case
+                        <Plus className="ml-2 h-4 w-4" />
+                      </Button>
+                    </CreateCaseDialog>
                   </div>
                 </div>
-                <div className="space-y-2">
-                  {[
-                    { id: "1", title: "Smith vs. Jones", type: "Contract Dispute" },
-                    { id: "2", title: "Estate Planning", type: "Will & Trust" },
-                    { id: "3", title: "Corporate Merger", type: "M&A" },
-                  ].map((case_) => (
-                    <Button
-                      key={case_.id}
-                      variant="outline"
-                      className={cn(
-                        "w-full justify-start text-left h-auto py-3",
-                        "hover:border-primary"
-                      )}
-                      onClick={() => router.push(`/cases/${case_.id}`)}
-                    >
-                      <div>
-                        <p className="font-medium">{case_.title}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {case_.type}
-                        </p>
-                      </div>
-                      <ArrowRight className="ml-auto h-4 w-4" />
-                    </Button>
-                  ))}
+
+                <div>
+                  <h3 className="font-medium mb-4">Recent Cases</h3>
+                  <div className="grid gap-2">
+                    {recentCases.map((case_) => (
+                      <Button
+                        key={case_.id}
+                        variant="outline"
+                        className="w-full justify-start h-auto py-3"
+                        onClick={() => router.push(`/cases/${case_.id}`)}
+                      >
+                        <div className="flex flex-col items-start">
+                          <span className="font-medium">{case_.title}</span>
+                          <span className="text-sm text-muted-foreground">
+                            {case_.type}
+                          </span>
+                        </div>
+                        <ArrowRight className="ml-auto h-4 w-4" />
+                      </Button>
+                    ))}
+                  </div>
                 </div>
               </div>
             </CardContent>

@@ -2,6 +2,66 @@ import { Message } from "@/types/chat";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
+const isClient = typeof window !== 'undefined';
+
+interface Thread {
+  id: string;
+  title: string;
+  createdAt: Date;
+  messages: Message[];
+}
+
+// Store threads in localStorage
+export function createThread(initialMessage: string): Thread {
+  if (!isClient) return {} as Thread;
+
+  const thread: Thread = {
+    id: Date.now().toString(),
+    title: initialMessage.slice(0, 50) + (initialMessage.length > 50 ? "..." : ""),
+    createdAt: new Date(),
+    messages: [{
+      id: Date.now().toString(),
+      role: "user",
+      content: initialMessage,
+      createdAt: new Date(),
+    }]
+  };
+
+  // Get existing threads and add the new one
+  const threads = getThreads();
+  threads.unshift(thread);
+  
+  // Save to localStorage
+  localStorage.setItem("chat_threads", JSON.stringify(threads));
+  return thread;
+}
+
+export function getThreads(): Thread[] {
+  if (!isClient) return [];
+  
+  const stored = localStorage.getItem("chat_threads");
+  if (!stored) return [];
+  
+  try {
+    return JSON.parse(stored).map((thread: Thread) => ({
+      ...thread,
+      createdAt: new Date(thread.createdAt),
+      messages: thread.messages.map(msg => ({
+        ...msg,
+        createdAt: new Date(msg.createdAt)
+      }))
+    }));
+  } catch (error) {
+    console.error("Error loading threads:", error);
+    return [];
+  }
+}
+
+export function getThread(threadId: string): Thread | null {
+  const threads = getThreads();
+  return threads.find(t => t.id === threadId) || null;
+}
+
 export async function streamChatResponse(
   messages: Message[],
   documentId?: string,

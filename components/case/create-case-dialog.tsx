@@ -2,104 +2,149 @@
 
 import { useState } from "react";
 import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import * as z from "zod";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { useCase } from "./case-context";
+import { Plus } from "lucide-react";
 
-const caseSchema = z.object({
-  title: z.string().min(1, "Title is required"),
-  clientName: z.string().min(1, "Client name is required"),
-  status: z.enum(["active", "pending", "closed"]),
-  description: z.string().optional(),
-});
+interface CreateCaseForm {
+  title: string;
+  clientName: string;
+  description: string;
+  status: "active" | "pending" | "closed";
+  priority: "high" | "medium" | "low";
+}
 
-type CaseFormData = z.infer<typeof caseSchema>;
-
-export function CreateCaseDialog() {
+export function CreateCaseDialog({ children }: { children?: React.ReactNode }) {
   const [open, setOpen] = useState(false);
-  const { createCase } = useCase();
-  
-  const form = useForm<CaseFormData>({
-    resolver: zodResolver(caseSchema),
-    defaultValues: {
-      status: "active",
-    },
-  });
+  const { addCase } = useCase();
+  const { register, handleSubmit, reset } = useForm<CreateCaseForm>();
 
-  const onSubmit = async (data: CaseFormData) => {
-    createCase(data);
+  const onSubmit = (data: CreateCaseForm) => {
+    addCase({
+      ...data,
+      tags: [],
+    });
     setOpen(false);
-    form.reset();
+    reset();
   };
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline">New Case</Button>
+        {children || (
+          <Button>
+            <Plus className="h-4 w-4 mr-2" />
+            Create Case
+          </Button>
+        )}
       </DialogTrigger>
       <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Create New Case</DialogTitle>
-        </DialogHeader>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-          <div>
-            <Input
-              placeholder="Case Title"
-              {...form.register("title")}
-            />
-            {form.formState.errors.title && (
-              <p className="text-sm text-red-500 mt-1">
-                {form.formState.errors.title.message}
-              </p>
-            )}
+        <form onSubmit={handleSubmit(onSubmit)}>
+          <DialogHeader>
+            <DialogTitle>Create New Case</DialogTitle>
+            <DialogDescription>
+              Add a new case to your workspace
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="title">Case Title</Label>
+              <Input
+                id="title"
+                {...register("title", { required: true })}
+                placeholder="Enter case title"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="clientName">Client Name</Label>
+              <Input
+                id="clientName"
+                {...register("clientName", { required: true })}
+                placeholder="Enter client name"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="description">Description</Label>
+              <Textarea
+                id="description"
+                {...register("description")}
+                placeholder="Enter case description"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="status">Status</Label>
+                <Select
+                  onValueChange={(value) =>
+                    register("status").onChange({
+                      target: { value, name: "status" },
+                    })
+                  }
+                  defaultValue="active"
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="pending">Pending</SelectItem>
+                    <SelectItem value="closed">Closed</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="priority">Priority</Label>
+                <Select
+                  onValueChange={(value) =>
+                    register("priority").onChange({
+                      target: { value, name: "priority" },
+                    })
+                  }
+                  defaultValue="medium"
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select priority" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="high">High</SelectItem>
+                    <SelectItem value="medium">Medium</SelectItem>
+                    <SelectItem value="low">Low</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
           </div>
-          
-          <div>
-            <Input
-              placeholder="Client Name"
-              {...form.register("clientName")}
-            />
-            {form.formState.errors.clientName && (
-              <p className="text-sm text-red-500 mt-1">
-                {form.formState.errors.clientName.message}
-              </p>
-            )}
-          </div>
-
-          <div>
-            <Select
-              onValueChange={(value) => form.setValue("status", value as any)}
-              defaultValue={form.getValues("status")}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setOpen(false);
+                reset();
+              }}
             >
-              <SelectTrigger>
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="active">Active</SelectItem>
-                <SelectItem value="pending">Pending</SelectItem>
-                <SelectItem value="closed">Closed</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div>
-            <textarea
-              className="w-full p-2 border rounded-md"
-              placeholder="Case Description (optional)"
-              {...form.register("description")}
-            />
-          </div>
-
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
               Cancel
             </Button>
             <Button type="submit">Create Case</Button>
-          </div>
+          </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>

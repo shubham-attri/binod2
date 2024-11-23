@@ -1,9 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import { X, GripVertical } from "lucide-react";
+import { useState, useEffect } from "react";
+import { GripVertical } from "lucide-react";
 import { ChatInterface } from "../chat/chat-interface";
-import { Button } from "@/components/ui/button";
 import { ArtifactView } from "../artifacts/artifact-view";
 import { 
   ResizableHandle, 
@@ -11,6 +10,8 @@ import {
   ResizablePanelGroup 
 } from "@/components/ui/resizable";
 import { motion, AnimatePresence } from "framer-motion";
+import { getThread } from "@/lib/chat-service";
+import { Message } from "@/types/chat";
 
 interface Artifact {
   id: string;
@@ -21,18 +22,32 @@ interface Artifact {
   updatedAt: Date;
 }
 
-interface ResearchChat {
-  id: string;
-  title: string;
+interface ResearchModeProps {
+  threadId?: string;
 }
 
-export function ResearchMode() {
+export function ResearchMode({ threadId }: ResearchModeProps) {
   const [selectedArtifact, setSelectedArtifact] = useState<Artifact | null>(null);
   const [showArtifact, setShowArtifact] = useState(false);
-  const [chat, setChat] = useState<ResearchChat>({
-    id: Date.now().toString(),
-    title: "New Research",
-  });
+  const [initialMessages, setInitialMessages] = useState<Message[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    if (threadId) {
+      const loadThread = () => {
+        const thread = getThread(threadId);
+        if (thread) {
+          setInitialMessages(thread.messages);
+        }
+        setIsLoading(false);
+      };
+
+      // Delay the localStorage access to ensure client-side execution
+      setTimeout(loadThread, 0);
+    } else {
+      setIsLoading(false);
+    }
+  }, [threadId]);
 
   const handleCreateArtifact = () => {
     const newArtifact: Artifact = {
@@ -47,9 +62,12 @@ export function ResearchMode() {
     setShowArtifact(true);
   };
 
+  if (isLoading) {
+    return <div>Loading...</div>; // Add a proper loading state here
+  }
+
   return (
     <div className="flex flex-col h-full">
-      {/* Main Content Area */}
       <ResizablePanelGroup direction="horizontal" className="flex-1">
         <ResizablePanel 
           defaultSize={showArtifact ? 40 : 100}
@@ -60,6 +78,7 @@ export function ResearchMode() {
             onCreateDocument={handleCreateArtifact}
             showCreateDocument
             selectedDocument={selectedArtifact}
+            initialMessages={initialMessages}
           />
         </ResizablePanel>
         
@@ -77,7 +96,6 @@ export function ResearchMode() {
                   transition={{ duration: 0.2 }}
                   className="h-full flex flex-col"
                 >
-                    
                   {selectedArtifact && (
                     <div className="flex-1">
                       <ArtifactView
