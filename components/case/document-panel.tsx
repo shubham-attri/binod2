@@ -7,16 +7,20 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { SheetHeader, SheetTitle, SheetClose } from "@/components/ui/sheet";
+import { documentService } from '@/lib/document-service'
+import { toast } from "sonner";
 
 interface Document {
   id: string;
-  name: string;
+  title: string;
   type: string;
-  uploadedAt: Date;
+  content: string;
+  created_at: string;
+  updated_at: string;
   size: number;
 }
 
-export function DocumentPanel() {
+export function DocumentPanel({ caseId }: { caseId: string }) {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [uploading, setUploading] = useState(false);
 
@@ -26,20 +30,31 @@ export function DocumentPanel() {
 
     setUploading(true);
     try {
-      // TODO: Implement file upload to Supabase
-      const newDoc: Document = {
-        id: Date.now().toString(),
-        name: files[0].name,
-        type: files[0].type,
-        uploadedAt: new Date(),
-        size: files[0].size,
-      };
+      const userId = 'test-user' // Replace with actual user ID from auth
+      const document = await documentService.uploadDocument(files[0], caseId, userId);
       
-      setDocuments((prev) => [...prev, newDoc]);
-    } catch (error) {
-      console.error("Error uploading file:", error);
+      setDocuments(prev => [...prev, document]);
+      toast.success('Document uploaded successfully');
+    } catch (err) {
+      console.error('Error uploading file:', err);
+      toast.error('Failed to upload document', {
+        description: 'Please try again later'
+      });
     } finally {
       setUploading(false);
+    }
+  };
+
+  const handleDelete = async (document: Document) => {
+    try {
+      await documentService.deleteDocument(document.id, document.content);
+      setDocuments(prev => prev.filter(d => d.id !== document.id));
+      toast.success('Document deleted successfully');
+    } catch (err) {
+      console.error('Error deleting document:', err);
+      toast.error('Failed to delete document', {
+        description: 'Please try again later'
+      });
     }
   };
 
@@ -97,13 +112,13 @@ export function DocumentPanel() {
                     <FileText className="h-4 w-4 text-primary" />
                   </div>
                   <div>
-                    <p className="font-medium">{doc.name}</p>
+                    <p className="font-medium">{doc.title}</p>
                     <p className="text-sm text-muted-foreground">
-                      {new Intl.NumberFormat("en-US", {
+                      {doc.size ? new Intl.NumberFormat("en-US", {
                         style: "unit",
                         unit: "byte",
                         unitDisplay: "narrow",
-                      }).format(doc.size)}
+                      }).format(doc.size) : "Size unknown"}
                     </p>
                   </div>
                 </div>
@@ -112,9 +127,7 @@ export function DocumentPanel() {
                   size="icon"
                   className="opacity-0 group-hover:opacity-100 text-destructive hover:text-destructive/90"
                   onClick={() => {
-                    setDocuments((prev) =>
-                      prev.filter((d) => d.id !== doc.id)
-                    );
+                    handleDelete(doc);
                   }}
                 >
                   <Trash2 className="h-4 w-4" />

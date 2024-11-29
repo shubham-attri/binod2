@@ -17,6 +17,7 @@ import {
   DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
 
 interface Case {
   id: string;
@@ -117,10 +118,14 @@ export function Cases() {
                 <div className="flex items-center gap-2">
                   <input
                     type="checkbox"
+                    id={`status-${status}`}
                     checked={statusFilter.includes(status)}
                     readOnly
+                    aria-label={`Filter by ${status} status`}
                   />
-                  {status.charAt(0).toUpperCase() + status.slice(1)}
+                  <Label htmlFor={`status-${status}`}>
+                    {status.charAt(0).toUpperCase() + status.slice(1)}
+                  </Label>
                 </div>
               </DropdownMenuItem>
             ))}
@@ -140,10 +145,14 @@ export function Cases() {
                 <div className="flex items-center gap-2">
                   <input
                     type="checkbox"
+                    id={`priority-${priority}`}
                     checked={priorityFilter.includes(priority)}
                     readOnly
+                    aria-label={`Filter by ${priority} priority`}
                   />
-                  {priority.charAt(0).toUpperCase() + priority.slice(1)}
+                  <Label htmlFor={`priority-${priority}`}>
+                    {priority.charAt(0).toUpperCase() + priority.slice(1)}
+                  </Label>
                 </div>
               </DropdownMenuItem>
             ))}
@@ -161,10 +170,14 @@ export function Cases() {
                 <div className="flex items-center gap-2">
                   <input
                     type="radio"
+                    id={`sort-${sort.value}`}
                     checked={sortBy === sort.value}
                     readOnly
+                    aria-label={`Sort by ${sort.label}`}
                   />
-                  {sort.label}
+                  <Label htmlFor={`sort-${sort.value}`}>
+                    {sort.label}
+                  </Label>
                 </div>
               </DropdownMenuItem>
             ))}

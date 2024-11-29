@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { GripVertical } from "lucide-react";
 import { ChatInterface } from "../chat/chat-interface";
 import { ArtifactView } from "../artifacts/artifact-view";
 import { 
@@ -9,114 +8,168 @@ import {
   ResizablePanel, 
   ResizablePanelGroup 
 } from "@/components/ui/resizable";
-import { motion, AnimatePresence } from "framer-motion";
 import { getThread } from "@/lib/chat-service";
 import { Message } from "@/types/chat";
-
-interface Artifact {
-  id: string;
-  title: string;
-  content: string;
-  type: "markdown" | "code";
-  createdAt: Date;
-  updatedAt: Date;
-}
+import { Artifact } from "@/types/artifacts";
+import { AnimatePresence, motion } from "framer-motion";
 
 interface ResearchModeProps {
   threadId?: string;
 }
 
 export function ResearchMode({ threadId }: ResearchModeProps) {
+  const [isLoading, setIsLoading] = useState(true);
+  const [isGenerating, setIsGenerating] = useState(false);
   const [selectedArtifact, setSelectedArtifact] = useState<Artifact | null>(null);
   const [showArtifact, setShowArtifact] = useState(false);
   const [initialMessages, setInitialMessages] = useState<Message[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    if (threadId) {
-      const loadThread = () => {
-        const thread = getThread(threadId);
+    const loadThread = async () => {
+      if (!threadId) {
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        const thread = await getThread(threadId);
         if (thread) {
           setInitialMessages(thread.messages);
         }
+      } catch (error) {
+        console.error("Error loading thread:", error);
+      } finally {
         setIsLoading(false);
-      };
+      }
+    };
 
-      // Delay the localStorage access to ensure client-side execution
-      setTimeout(loadThread, 0);
-    } else {
-      setIsLoading(false);
-    }
+    loadThread();
   }, [threadId]);
 
-  const handleCreateArtifact = () => {
-    const newArtifact: Artifact = {
-      id: Date.now().toString(),
-      title: "New Document",
-      content: "",
-      type: "markdown",
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-    setSelectedArtifact(newArtifact);
+  const handleSubmit = async (input: string) => {
+    setIsGenerating(true);
+    try {
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          query: input,
+          documentId: selectedArtifact?.id,
+          documentType: selectedArtifact?.type
+        })
+      });
+
+      if (!response.ok) throw new Error("Failed to process query");
+      
+      // Handle streaming response
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error("No response reader");
+
+      // Process chunks
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        
+        // Process the chunk and update UI
+        const chunk = new TextDecoder().decode(value);
+        const data = JSON.parse(chunk);
+        
+        if (data.document && data.document.id) {
+          setSelectedArtifact(data.document);
+          setShowArtifact(true);
+        }
+      }
+    } catch (error) {
+      console.error("Error processing message:", error);
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const handleFileUpload = async (file: File) => {
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const response = await fetch("/api/documents/upload", {
+        method: "POST",
+        body: formData
+      });
+
+      if (!response.ok) throw new Error("Failed to upload file");
+      
+      const document = await response.json();
+      setSelectedArtifact(document);
+      setShowArtifact(true);
+    } catch (error) {
+      console.error("Error uploading file:", error);
+    }
+  };
+
+  const handleDocumentSelect = (document: Artifact) => {
+    setSelectedArtifact(document);
     setShowArtifact(true);
   };
 
+  const handleCloseArtifact = () => {
+    setShowArtifact(false);
+    // Add a small delay before removing the artifact to allow animation
+    setTimeout(() => setSelectedArtifact(null), 300);
+  };
+
   if (isLoading) {
-    return <div>Loading...</div>; // Add a proper loading state here
+    return <div>Loading...</div>;
   }
 
   return (
-    <div className="flex flex-col h-full">
-      <ResizablePanelGroup direction="horizontal" className="flex-1">
-        <ResizablePanel 
-          defaultSize={showArtifact ? 40 : 100}
-          minSize={30}
-          maxSize={70}
-        >
-          <ChatInterface
-            onCreateDocument={handleCreateArtifact}
-            showCreateDocument
-            selectedDocument={selectedArtifact}
-            initialMessages={initialMessages}
-          />
-        </ResizablePanel>
-        
-        <AnimatePresence>
-          {showArtifact && (
-            <>
-              <ResizableHandle withHandle>
-                <GripVertical className="h-4 w-4" />
-              </ResizableHandle>
-              <ResizablePanel defaultSize={60}>
-                <motion.div
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: 20 }}
-                  transition={{ duration: 0.2 }}
-                  className="h-full flex flex-col"
-                >
-                  {selectedArtifact && (
-                    <div className="flex-1">
-                      <ArtifactView
-                        artifact={selectedArtifact}
-                        onUpdate={(content) => {
-                          setSelectedArtifact({
-                            ...selectedArtifact,
-                            content,
-                            updatedAt: new Date(),
-                          });
-                        }}
-                        onClose={() => setShowArtifact(false)}
-                      />
-                    </div>
-                  )}
-                </motion.div>
-              </ResizablePanel>
-            </>
-          )}
-        </AnimatePresence>
-      </ResizablePanelGroup>
+    <div className="h-full">
+      <AnimatePresence initial={false}>
+        {showArtifact && selectedArtifact ? (
+          <ResizablePanelGroup direction="horizontal" className="h-full">
+            <ResizablePanel defaultSize={50} minSize={30}>
+              <ChatInterface
+                initialMessages={initialMessages}
+                isLoading={isGenerating}
+                isProcessing={isGenerating}
+                selectedDocument={selectedArtifact}
+                onSubmit={handleSubmit}
+                onFileUpload={handleFileUpload}
+              />
+            </ResizablePanel>
+            <ResizableHandle />
+            <ResizablePanel defaultSize={50} minSize={30}>
+              <motion.div
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 20 }}
+                transition={{ duration: 0.2 }}
+                className="h-full"
+              >
+                <ArtifactView
+                  artifact={selectedArtifact}
+                  onClose={handleCloseArtifact}
+                  onSelect={handleDocumentSelect}
+                />
+              </motion.div>
+            </ResizablePanel>
+          </ResizablePanelGroup>
+        ) : (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="h-full"
+          >
+            <ChatInterface
+              initialMessages={initialMessages}
+              isLoading={isGenerating}
+              isProcessing={isGenerating}
+              selectedDocument={selectedArtifact}
+              onSubmit={handleSubmit}
+              onFileUpload={handleFileUpload}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 } 

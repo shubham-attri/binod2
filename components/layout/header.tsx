@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { FileText, Menu, ChevronRight } from "lucide-react";
+import { FileText, Menu, ChevronRight, Plus, Clock, History } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { DocumentPanel } from "../case/document-panel";
 import { cn } from "@/lib/utils";
@@ -21,7 +21,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import Link from "next/link";
+import { DocumentVersion } from "@/types/artifacts";
 
 interface HeaderProps {
   className?: string;
@@ -29,6 +31,8 @@ interface HeaderProps {
   title: string;
   onTitleChange?: (title: string) => void;
   onSidebarToggle: () => void;
+  documentVersions?: DocumentVersion[];
+  onVersionSelect?: (version: DocumentVersion) => void;
 }
 
 export function Header({ 
@@ -36,23 +40,34 @@ export function Header({
   mode, 
   title, 
   onTitleChange,
-  onSidebarToggle 
+  onSidebarToggle,
+  documentVersions,
+  onVersionSelect
 }: HeaderProps) {
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [tempTitle, setTempTitle] = useState(title);
   const pathname = usePathname();
+  const router = useRouter();
   const showBreadcrumbs = pathname.startsWith("/research") || pathname.startsWith("/cases");
-  const showHeader = !pathname.startsWith("/vault");
 
-  if (!showHeader) {
-    return null;
-  }
+  // Extract case ID from pathname if in case mode
+  const caseId = mode === "case" && pathname.startsWith("/cases/") 
+    ? pathname.split("/")[2] 
+    : undefined;
 
   const handleTitleSave = () => {
     if (onTitleChange && tempTitle.trim()) {
       onTitleChange(tempTitle);
     }
     setIsEditingTitle(false);
+  };
+
+  const handleNewResearch = () => {
+    router.push("/research");
+  };
+
+  const handleNewCase = () => {
+    router.push("/cases");
   };
 
   return (
@@ -71,16 +86,16 @@ export function Header({
         </Button>
         
         {showBreadcrumbs ? (
-          <div className="flex-1">
+          <div className="flex-1 flex items-center">
             <Breadcrumb>
               <BreadcrumbList>
                 <BreadcrumbItem>
-                  <BreadcrumbLink 
-                    href="#"
+                  <Link 
+                    href={`/${mode}`}
                     className="text-sm font-medium text-muted-foreground hover:text-foreground"
                   >
                     {mode === "research" ? "Research" : "Cases"}
-                  </BreadcrumbLink>
+                  </Link>
                 </BreadcrumbItem>
                 <BreadcrumbSeparator>
                   <ChevronRight className="h-4 w-4" />
@@ -106,47 +121,113 @@ export function Header({
                       />
                     </div>
                   ) : (
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button 
-                          variant="ghost" 
-                          className="h-auto p-0 font-normal hover:bg-transparent"
-                        >
-                          <BreadcrumbPage className="text-sm font-medium">
-                            {title}
-                          </BreadcrumbPage>
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="start">
-                        <DropdownMenuItem onClick={() => setIsEditingTitle(true)}>
-                          Rename
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                    <div className="flex items-center gap-2">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button 
+                            variant="ghost" 
+                            className="h-auto p-0 font-normal hover:bg-transparent"
+                          >
+                            <span className="text-sm font-medium">
+                              {title}
+                            </span>
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start">
+                          <DropdownMenuItem onClick={() => setIsEditingTitle(true)}>
+                            Rename
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+
+                      {documentVersions && documentVersions.length > 0 && (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button 
+                              variant="ghost" 
+                              size="sm"
+                              className="h-7 gap-1"
+                            >
+                              <History className="h-4 w-4" />
+                              <span className="text-xs">
+                                {documentVersions.length} versions
+                              </span>
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="start" className="w-[300px]">
+                            {documentVersions.map((version, index) => (
+                              <DropdownMenuItem
+                                key={version.id}
+                                onClick={() => onVersionSelect?.(version)}
+                                className="flex items-center justify-between"
+                              >
+                                <div className="flex items-center gap-2">
+                                  <Clock className="h-4 w-4" />
+                                  <div className="flex flex-col">
+                                    <span className="text-sm">
+                                      Version {documentVersions.length - index}
+                                    </span>
+                                    {version.comment && (
+                                      <span className="text-xs text-muted-foreground">
+                                        {version.comment}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                                <span className="text-xs text-muted-foreground">
+                                  {new Date(version.createdAt).toLocaleString()}
+                                </span>
+                              </DropdownMenuItem>
+                            ))}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
+                    </div>
                   )}
                 </BreadcrumbItem>
               </BreadcrumbList>
             </Breadcrumb>
+
+            <div className="ml-auto flex items-center gap-2">
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={mode === "research" ? handleNewResearch : handleNewCase}
+                className="gap-2"
+              >
+                <Plus className="h-4 w-4" />
+                New {mode === "research" ? "Research" : "Case"}
+              </Button>
+
+              <Sheet>
+                <SheetTrigger asChild>
+                  <Button variant="outline" size="sm" className="gap-2">
+                    <FileText className="h-4 w-4" />
+                    Documents
+                  </Button>
+                </SheetTrigger>
+                <SheetContent side="right" className="w-[600px] sm:w-[800px] p-0">
+                  <DocumentPanel caseId={caseId || ""} />
+                </SheetContent>
+              </Sheet>
+            </div>
           </div>
         ) : (
-          <div className="flex-1">
+          <div className="flex-1 flex items-center justify-between">
             <h1 className="text-lg font-semibold">
-              Chat History
+              {mode === "research" ? "Research History" : "Case History"}
             </h1>
+            <Button 
+              variant="default" 
+              size="sm" 
+              onClick={mode === "research" ? handleNewResearch : handleNewCase}
+              className="gap-2"
+            >
+              <Plus className="h-4 w-4" />
+              New {mode === "research" ? "Research" : "Case"}
+            </Button>
           </div>
         )}
-
-        <Sheet>
-          <SheetTrigger asChild>
-            <Button variant="outline" size="sm" className="ml-auto gap-2">
-              <FileText className="h-5 w-5" />
-              Documents
-            </Button>
-          </SheetTrigger>
-          <SheetContent side="right" className="w-[600px] sm:w-[800px] p-0">
-            <DocumentPanel />
-          </SheetContent>
-        </Sheet>
       </div>
     </header>
   );

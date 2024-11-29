@@ -4,22 +4,37 @@ import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Sparkles, Send, Briefcase, ArrowRight, Plus } from "lucide-react";
+import { Sparkles, Send, ArrowRight, Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { CreateCaseDialog } from "../case/create-case-dialog";
+import { ResearchMode } from "../research/research-mode";
+import { CaseMode } from "../case/case-mode";
 import { createThread } from "@/lib/chat-service";
 
-export function Playground() {
+interface PlaygroundProps {
+  mode?: "research" | "case";
+  caseId?: string;
+  threadId?: string;
+}
+
+export function Playground({ mode, caseId, threadId }: PlaygroundProps) {
   const router = useRouter();
   const [query, setQuery] = useState("");
 
+  // If we're in a specific mode, render that mode
+  if (mode === "case" && caseId) {
+    return <CaseMode caseId={caseId} threadId={threadId} />;
+  }
+  if (mode === "research" && threadId) {
+    return <ResearchMode threadId={threadId} />;
+  }
+
+  // Otherwise show the landing page
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (query.trim()) {
-      // Create a new thread and store it with the initial query
       const thread = createThread(query.trim());
-      // Redirect to research mode with the thread ID
       router.push(`/research/${thread.id}`);
     }
   };
@@ -29,6 +44,7 @@ export function Playground() {
     router.push(`/research/${thread.id}`);
   };
 
+  // TODO: Replace with actual recent cases from Supabase
   const recentCases = [
     { id: "1", title: "Smith vs. Jones", type: "Contract Dispute" },
     { id: "2", title: "Estate Planning", type: "Will & Trust" },

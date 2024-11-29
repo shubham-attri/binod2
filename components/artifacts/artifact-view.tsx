@@ -1,185 +1,119 @@
 "use client";
 
 import { useState } from "react";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Copy, Download, X, Edit2 } from "lucide-react";
-import { MarkdownEditor } from "../editor/markdown-editor";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { 
+  X, 
+  Download, 
+  History, 
+  Copy, 
+  ExternalLink,
+  ChevronDown
+} from "lucide-react";
+import { Artifact, DocumentVersion } from "@/types/artifacts";
 import { cn } from "@/lib/utils";
-import { ActionsToolbar } from "./actions-toolbar";
-import { Input } from "@/components/ui/input";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { format } from "date-fns";
 
-interface Artifact {
-  id: string;
-  title: string;
-  content: string;
-  type: "markdown" | "code";
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-interface ArtifactViewProps {
+export interface ArtifactViewProps {
   artifact: Artifact;
-  onUpdate: (content: string) => void;
-  onClose?: () => void;
+  onClose: () => void;
+  onSelect?: (document: Artifact) => void;
   className?: string;
 }
 
-export function ArtifactView({ artifact, onUpdate, onClose, className }: ArtifactViewProps) {
-  const [isEditing, setIsEditing] = useState(false);
-  const [content, setContent] = useState(artifact.content);
-  const [isLoading, setIsLoading] = useState(false);
-  const [isEditingTitle, setIsEditingTitle] = useState(false);
-  const [title, setTitle] = useState(artifact.title);
-
-  const handleSave = () => {
-    onUpdate(content);
-    setIsEditing(false);
-  };
+export function ArtifactView({
+  artifact,
+  onClose,
+  className
+}: ArtifactViewProps) {
+  const [selectedVersion, setSelectedVersion] = useState<DocumentVersion | null>(
+    artifact.metadata?.versions?.[0] || null
+  );
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(content);
+    navigator.clipboard.writeText(artifact.content);
   };
 
   const handleDownload = () => {
-    const blob = new Blob([content], { type: "text/markdown" });
+    const blob = new Blob([artifact.content], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `${title}.md`;
+    a.download = artifact.title;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
   };
 
-  const handleTitleSave = () => {
-    if (title.trim()) {
-      // TODO: Implement title update
-      artifact.title = title;
-      setIsEditingTitle(false);
-    }
-  };
-
-  const handleAction = async (action: string, options?: any) => {
-    setIsLoading(true);
-    try {
-      // TODO: Implement action handling with LangChain
-      switch (action) {
-        case "expand":
-          // Make content longer
-          break;
-        case "shorten":
-          // Make content shorter
-          break;
-        case "simplify":
-          // Simplify language
-          break;
-        case "professional":
-          // Make more professional
-          break;
-        case "fix_grammar":
-          // Fix grammar
-          break;
-        // ... handle other actions
-      }
-    } catch (error) {
-      console.error("Error executing action:", error);
-    } finally {
-      setIsLoading(false);
-    }
+  const handleVersionSelect = (version: DocumentVersion) => {
+    setSelectedVersion(version);
   };
 
   return (
     <Card className={cn("flex flex-col h-full", className)}>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-4">
-        <div className="flex items-center gap-2">
-          {isEditingTitle ? (
-            <div className="flex items-center gap-2">
-              <Input
-                className="h-7 w-[200px]"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                onBlur={handleTitleSave}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    handleTitleSave();
-                  } else if (e.key === "Escape") {
-                    setTitle(artifact.title);
-                    setIsEditingTitle(false);
-                  }
-                }}
-                placeholder="Document name..."
-                autoFocus
-              />
-            </div>
-          ) : (
-            <div className="flex items-center gap-2">
-              <span className="text-lg font-semibold">{title}</span>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-6 w-6 p-0"
-                onClick={() => setIsEditingTitle(true)}
-              >
-                <Edit2 className="h-3 w-3" />
-              </Button>
-            </div>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 py-2">
+        <div className="flex items-center space-x-4">
+          <CardTitle className="truncate">{artifact.title}</CardTitle>
+          {artifact.metadata?.versions && artifact.metadata.versions.length > 0 && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <History className="h-4 w-4 mr-1" />
+                  {selectedVersion ? format(new Date(selectedVersion.createdAt), "MMM d, yyyy") : "Versions"}
+                  <ChevronDown className="h-4 w-4 ml-1" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent>
+                {artifact.metadata.versions.map((version) => (
+                  <DropdownMenuItem
+                    key={version.id}
+                    onClick={() => handleVersionSelect(version)}
+                  >
+                    {format(new Date(version.createdAt), "MMM d, yyyy h:mm a")}
+                    {version.comment && ` - ${version.comment}`}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
         </div>
-        <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleCopy}
-            className="text-muted-foreground"
-          >
+        <div className="flex items-center space-x-2">
+          <Button variant="ghost" size="icon" onClick={handleCopy} title="Copy">
             <Copy className="h-4 w-4" />
           </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleDownload}
-            className="text-muted-foreground"
-          >
+          <Button variant="ghost" size="icon" onClick={handleDownload} title="Download">
             <Download className="h-4 w-4" />
           </Button>
-          {onClose && (
+          {artifact.metadata?.storageUrl && (
             <Button
               variant="ghost"
-              size="sm"
-              onClick={onClose}
-              className="text-muted-foreground"
+              size="icon"
+              onClick={() => window.open(artifact.metadata?.storageUrl, "_blank")}
+              title="Open in new tab"
             >
-              <X className="h-4 w-4" />
+              <ExternalLink className="h-4 w-4" />
             </Button>
           )}
+          <Button variant="ghost" size="icon" onClick={onClose} title="Close">
+            <X className="h-4 w-4" />
+          </Button>
         </div>
       </CardHeader>
-      
-      <ActionsToolbar type={artifact.type} onAction={handleAction} />
-      
-      <CardContent className="flex-1 pt-4">
-        <MarkdownEditor
-          content={content}
-          onChange={setContent}
-          className="h-[calc(100vh-12rem)]"
-        />
-
-        {isEditing && (
-          <div className="flex justify-end gap-2 mt-4">
-            <Button
-              variant="outline"
-              onClick={() => {
-                setContent(artifact.content);
-                setIsEditing(false);
-              }}
-            >
-              Cancel
-            </Button>
-            <Button onClick={handleSave}>Save Changes</Button>
+      <CardContent className="flex-1 p-4">
+        <ScrollArea className="h-full">
+          <div className="prose dark:prose-invert max-w-none">
+            {selectedVersion ? selectedVersion.content : artifact.content}
           </div>
-        )}
+        </ScrollArea>
       </CardContent>
     </Card>
   );
