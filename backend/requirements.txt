@@ -17,4 +17,7 @@ anthropic>=0.39.0,<1.0.0
 redis-om==0.2.1
 pillow==10.2.0
 pypdf==4.0.1
-python-magic==0.4.27 
+python-magic==0.4.27
+fastapi-cors==0.0.6
+python-jose==3.3.0
+bcrypt==4.1.2 
