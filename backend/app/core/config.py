@@ -1,46 +1,37 @@
-from pydantic_settings import BaseSettings
-from typing import Optional, List
 from functools import lru_cache
+from pydantic_settings import BaseSettings
+from typing import List
 
 class Settings(BaseSettings):
-    # API Settings
-    API_V1_STR: str = "/api/v1"
-    PROJECT_NAME: str = "Legal AI Assistant"
+    APP_NAME: str = "Agent Binod"
+    DEBUG: bool = True
+    API_V1_PREFIX: str = "/api/v1"
+    BACKEND_CORS_ORIGINS: List[str] = ["http://localhost:3000"]
     
-    # Supabase Settings
+    # Security
+    SECRET_KEY: str = "09d25e094faa6ca2556c818166b7a9563b93f7099f6f0f4caa6cf63b88e8d3e7"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+    ALGORITHM: str = "HS256"
+    
+    # Development
+    DEV_MODE: bool = True
+    DEV_ADMIN_EMAIL: str = "admin@agentbinod.dev"
+    
+    # Supabase
     SUPABASE_URL: str
     SUPABASE_KEY: str
-    SUPABASE_JWT_SECRET: str
+    SUPABASE_SERVICE_KEY: str
     
-    # Redis Settings
-    REDIS_URL: str = "redis://redis:6379"
-    
-    # AI Settings
+    # AI
     ANTHROPIC_API_KEY: str
-    
-    # Canvas Settings
-    CANVAS_STORAGE_PATH: str = "/app/storage/canvas"
-    MAX_UPLOAD_SIZE: int = 10 * 1024 * 1024  # 10MB
-    
-    # Security Settings
-    SECRET_KEY: str
-    ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
-    
-    # CORS Settings for Docker
-    CORS_ORIGINS: List[str] = [
-        "http://localhost:3000",     # Local development
-        "http://127.0.0.1:3000",     # Alternative local
-        "http://frontend:3000",      # Docker service
-        "http://binod-frontend-1:3000"  # Docker container
-    ]
-    
-    # Development Settings
-    DEBUG: bool = True
     
     class Config:
         env_file = ".env"
+        case_sensitive = True
 
 @lru_cache()
 def get_settings() -> Settings:
-    return Settings() 
+    return Settings()
+
+# Export settings instance
+settings = get_settings() 

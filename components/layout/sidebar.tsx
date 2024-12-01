@@ -21,6 +21,8 @@ import {
 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { useAuth } from "@/lib/auth-context";
+import Link from "next/link";
 
 interface SidebarProps {
   className?: string;
@@ -37,6 +39,7 @@ export function Sidebar({ className }: SidebarProps) {
   const router = useRouter();
   const [isCollapsed, setIsCollapsed] = React.useState(false);
   const [isMobileOpen, setIsMobileOpen] = React.useState(false);
+  const { user, signOut } = useAuth();
 
   const mainNavItems: NavItem[] = [
     {

@@ -1,12 +1,6 @@
 import { useState, useCallback } from "react";
-
-export interface Message {
-  id: string;
-  content: string;
-  role: "user" | "assistant";
-  timestamp: Date;
-  sender?: string;
-}
+import { apiClient } from "@/lib/api-client";
+import { ChatMessage } from "@/lib/types";
 
 interface UseChatOptions {
   onError?: (error: Error) => void;
@@ -15,43 +9,41 @@ interface UseChatOptions {
 }
 
 export function useChat(options: UseChatOptions = {}) {
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
+  const [contextId, setContextId] = useState<string | null>(null);
 
-  const addMessage = useCallback((content: string, role: "user" | "assistant", sender?: string) => {
-    const message: Message = {
-      id: Math.random().toString(36).substring(7),
-      content,
-      role,
-      timestamp: new Date(),
-      sender,
-    };
+  const addMessage = useCallback((message: ChatMessage) => {
     setMessages((prev) => [...prev, message]);
     return message;
   }, []);
 
   const sendMessage = useCallback(
-    async (content: string, sender?: string) => {
+    async (content: string) => {
       try {
         setIsLoading(true);
         setError(null);
 
-        // Add user message
-        addMessage(content, "user", sender);
+        // Add user message immediately
+        const userMessage: ChatMessage = {
+          id: Math.random().toString(36).substring(7),
+          content,
+          role: "user",
+          created_at: new Date().toISOString(),
+        };
+        addMessage(userMessage);
 
-        // TODO: Replace with actual API call
-        const response = await new Promise((resolve) => {
-          setTimeout(() => {
-            resolve({
-              content: "This is a mock response. Replace with actual API integration.",
-              sender: "AI Assistant"
-            });
-          }, 1000);
-        });
+        // Send message to API
+        const response = await apiClient.sendMessage(content, contextId || undefined);
+        
+        // Update context ID if not set
+        if (!contextId) {
+          setContextId(response.context_id);
+        }
 
         // Add assistant message
-        addMessage((response as any).content, "assistant", (response as any).sender);
+        addMessage(response.message);
 
         options.onResponse?.(response);
         options.onFinish?.();
@@ -63,11 +55,66 @@ export function useChat(options: UseChatOptions = {}) {
         setIsLoading(false);
       }
     },
-    [addMessage, options]
+    [contextId, addMessage, options]
+  );
+
+  const streamMessage = useCallback(
+    async (content: string) => {
+      try {
+        setIsLoading(true);
+        setError(null);
+
+        // Add user message immediately
+        const userMessage: ChatMessage = {
+          id: Math.random().toString(36).substring(7),
+          content,
+          role: "user",
+          created_at: new Date().toISOString(),
+        };
+        addMessage(userMessage);
+
+        // Create assistant message placeholder
+        const assistantMessage: ChatMessage = {
+          id: Math.random().toString(36).substring(7),
+          content: "",
+          role: "assistant",
+          created_at: new Date().toISOString(),
+        };
+        addMessage(assistantMessage);
+
+        // Stream response
+        await apiClient.streamMessage(
+          content,
+          contextId || undefined,
+          (chunk) => {
+            setMessages((prev) => {
+              const lastMessage = prev[prev.length - 1];
+              if (lastMessage.role === "assistant") {
+                return [
+                  ...prev.slice(0, -1),
+                  { ...lastMessage, content: lastMessage.content + chunk },
+                ];
+              }
+              return prev;
+            });
+          }
+        );
+
+        options.onFinish?.();
+      } catch (err) {
+        const error = err as Error;
+        setError(error);
+        options.onError?.(error);
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [contextId, addMessage, options]
   );
 
   const clearMessages = useCallback(() => {
     setMessages([]);
+    setContextId(null);
   }, []);
 
   return {
@@ -75,7 +122,8 @@ export function useChat(options: UseChatOptions = {}) {
     isLoading,
     error,
     sendMessage,
+    streamMessage,
     clearMessages,
-    setMessages,
+    contextId,
   };
 } 
