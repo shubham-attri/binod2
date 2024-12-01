@@ -1,5 +1,5 @@
-import { Playground } from "@/components/playground/playground";
+import { redirect } from "next/navigation";
 
 export default function HomePage() {
-  return <Playground />;
+  redirect("/research");
 }

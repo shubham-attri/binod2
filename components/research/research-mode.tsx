@@ -1,175 +1,185 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import React from "react";
 import { ChatInterface } from "../chat/chat-interface";
-import { ArtifactView } from "../artifacts/artifact-view";
-import { 
-  ResizableHandle, 
-  ResizablePanel, 
-  ResizablePanelGroup 
-} from "@/components/ui/resizable";
-import { getThread } from "@/lib/chat-service";
-import { Message } from "@/types/chat";
-import { Artifact } from "@/types/artifacts";
-import { AnimatePresence, motion } from "framer-motion";
+import { DocumentPanel, type Document } from "./document-panel";
+import { useChat } from "../../hooks/use-chat";
+import { toast } from "sonner";
+import { Button } from "../ui/button";
+import { ChevronRight, Upload, X } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { Input } from "../ui/input";
+import { ScrollArea } from "../ui/scroll-area";
 
-interface ResearchModeProps {
-  threadId?: string;
-}
+export interface ResearchModeProps {}
 
-export function ResearchMode({ threadId }: ResearchModeProps) {
-  const [isLoading, setIsLoading] = useState(true);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [selectedArtifact, setSelectedArtifact] = useState<Artifact | null>(null);
-  const [showArtifact, setShowArtifact] = useState(false);
-  const [initialMessages, setInitialMessages] = useState<Message[]>([]);
+export function ResearchMode({}: ResearchModeProps) {
+  const { messages, sendMessage, isLoading } = useChat();
+  const [documents, setDocuments] = React.useState<Document[]>([]);
+  const [isSearching, setIsSearching] = React.useState(false);
+  const [isPanelCollapsed, setIsPanelCollapsed] = React.useState(false);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const [isDocPanelOpen, setIsDocPanelOpen] = React.useState(false);
+  const [isFullscreen, setIsFullscreen] = React.useState(false);
 
-  useEffect(() => {
-    const loadThread = async () => {
-      if (!threadId) {
-        setIsLoading(false);
-        return;
-      }
+  const handleSearch = async (query: string) => {
+    if (!query.trim()) {
+      setDocuments([]);
+      return;
+    }
 
-      try {
-        const thread = await getThread(threadId);
-        if (thread) {
-          setInitialMessages(thread.messages);
-        }
-      } catch (error) {
-        console.error("Error loading thread:", error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    loadThread();
-  }, [threadId]);
-
-  const handleSubmit = async (input: string) => {
-    setIsGenerating(true);
+    setIsSearching(true);
     try {
-      const response = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          query: input,
-          documentId: selectedArtifact?.id,
-          documentType: selectedArtifact?.type
-        })
-      });
-
-      if (!response.ok) throw new Error("Failed to process query");
+      // TODO: Replace with actual API call
+      const mockDocuments: Document[] = [
+        {
+          id: "1",
+          title: "Contract Agreement Template",
+          type: "pdf",
+          url: "/documents/contract.pdf",
+          excerpt: "Standard contract agreement template with legal terms...",
+        },
+        {
+          id: "2",
+          title: "Legal Research Guidelines",
+          type: "doc",
+          url: "/documents/guidelines.doc",
+          excerpt: "Comprehensive guide for conducting legal research...",
+        },
+      ];
       
-      // Handle streaming response
-      const reader = response.body?.getReader();
-      if (!reader) throw new Error("No response reader");
-
-      // Process chunks
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        
-        // Process the chunk and update UI
-        const chunk = new TextDecoder().decode(value);
-        const data = JSON.parse(chunk);
-        
-        if (data.document && data.document.id) {
-          setSelectedArtifact(data.document);
-          setShowArtifact(true);
-        }
-      }
+      // Simulate API delay
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      setDocuments(mockDocuments);
     } catch (error) {
-      console.error("Error processing message:", error);
+      console.error("Search error:", error);
+      toast.error("Failed to search documents", {
+        description: "An error occurred while searching documents. Please try again."
+      });
     } finally {
-      setIsGenerating(false);
+      setIsSearching(false);
     }
   };
 
-  const handleFileUpload = async (file: File) => {
+  const handleDocumentSelect = async (document: Document) => {
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-
-      const response = await fetch("/api/documents/upload", {
-        method: "POST",
-        body: formData
+      // TODO: Replace with actual document content fetching
+      const message = `I've selected the document: "${document.title}". Please analyze this document and provide a summary of its key points.`;
+      await sendMessage(message);
+      toast.success("Document selected", {
+        description: `Analyzing "${document.title}". Please wait for the summary.`
       });
-
-      if (!response.ok) throw new Error("Failed to upload file");
-      
-      const document = await response.json();
-      setSelectedArtifact(document);
-      setShowArtifact(true);
     } catch (error) {
-      console.error("Error uploading file:", error);
+      console.error("Document selection error:", error);
+      toast.error("Failed to load document", {
+        description: "An error occurred while loading the document. Please try again."
+      });
     }
   };
 
-  const handleDocumentSelect = (document: Artifact) => {
-    setSelectedArtifact(document);
-    setShowArtifact(true);
-  };
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files?.length) return;
 
-  const handleCloseArtifact = () => {
-    setShowArtifact(false);
-    // Add a small delay before removing the artifact to allow animation
-    setTimeout(() => setSelectedArtifact(null), 300);
+    try {
+      toast.promise(
+        new Promise((resolve) => setTimeout(resolve, 2000)), // Simulate upload
+        {
+          loading: "Uploading document...",
+          success: `Successfully uploaded ${files[0].name}`,
+          error: "Failed to upload document",
+        }
+      );
+    } catch (error) {
+      console.error("Upload error:", error);
+    }
   };
-
-  if (isLoading) {
-    return <div>Loading...</div>;
-  }
 
   return (
-    <div className="h-full">
-      <AnimatePresence initial={false}>
-        {showArtifact && selectedArtifact ? (
-          <ResizablePanelGroup direction="horizontal" className="h-full">
-            <ResizablePanel defaultSize={50} minSize={30}>
-              <ChatInterface
-                initialMessages={initialMessages}
-                isLoading={isGenerating}
-                isProcessing={isGenerating}
-                selectedDocument={selectedArtifact}
-                onSubmit={handleSubmit}
-                onFileUpload={handleFileUpload}
-              />
-            </ResizablePanel>
-            <ResizableHandle />
-            <ResizablePanel defaultSize={50} minSize={30}>
-              <motion.div
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: 20 }}
-                transition={{ duration: 0.2 }}
-                className="h-full"
+    <div className="flex h-screen">
+      <div className="flex-1 flex flex-col p-4">
+        <ChatInterface
+          messages={messages}
+          onSendMessage={sendMessage}
+          isLoading={isLoading}
+          className="h-full w-full"
+          actions={
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => fileInputRef.current?.click()}
+              className="shrink-0"
+            >
+              <Upload className="h-4 w-4" />
+              <span className="sr-only">Upload document</span>
+            </Button>
+          }
+        />
+        {isDocPanelOpen && !isFullscreen && (
+          <div className="w-[350px] border-l flex flex-col">
+            <div className="h-14 border-b flex items-center justify-between px-4">
+              <h2 className="font-medium">Documents</h2>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setIsDocPanelOpen(false)}
               >
-                <ArtifactView
-                  artifact={selectedArtifact}
-                  onClose={handleCloseArtifact}
-                  onSelect={handleDocumentSelect}
-                />
-              </motion.div>
-            </ResizablePanel>
-          </ResizablePanelGroup>
-        ) : (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="h-full"
-          >
-            <ChatInterface
-              initialMessages={initialMessages}
-              isLoading={isGenerating}
-              isProcessing={isGenerating}
-              selectedDocument={selectedArtifact}
-              onSubmit={handleSubmit}
-              onFileUpload={handleFileUpload}
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+            <DocumentPanel
+              documents={[]}
+              onDocumentSelect={() => {}}
+              isLoading={false}
             />
-          </motion.div>
+          </div>
         )}
-      </AnimatePresence>
+        <label htmlFor="file-upload" className="sr-only">
+          Upload document
+        </label>
+        <input
+          id="file-upload"
+          ref={fileInputRef}
+          type="file"
+          className="hidden"
+          onChange={(e) => {
+            // Handle file upload
+            console.log(e.target.files);
+          }}
+          accept=".pdf,.doc,.docx,.txt"
+          aria-label="Upload document"
+          title="Upload document"
+        />
+      </div>
+
+      <div className={cn(
+        "flex transition-all duration-300",
+        isPanelCollapsed ? "w-10" : "w-[300px]"
+      )}>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => setIsPanelCollapsed(!isPanelCollapsed)}
+          className="shrink-0"
+        >
+          <ChevronRight className={cn(
+            "h-4 w-4 transition-transform",
+            !isPanelCollapsed && "rotate-180"
+          )} />
+        </Button>
+        {!isPanelCollapsed && (
+          <div className="border-l flex-1">
+            <ScrollArea className="h-full">
+              <DocumentPanel
+                documents={documents}
+                onSearch={handleSearch}
+                onDocumentSelect={handleDocumentSelect}
+                isLoading={isSearching}
+              />
+            </ScrollArea>
+          </div>
+        )}
+      </div>
     </div>
   );
 } 
