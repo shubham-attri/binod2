@@ -1,18 +1,21 @@
 "use client";
 
-import { Sidebar } from "./sidebar";
-import { Toaster } from "sonner";
+import { AuthProvider } from "@/lib/auth-context";
+import { ChatProvider } from "@/lib/chat-context";
+import ProtectedRoute from "@/components/protected-route";
 
-export function ClientLayout({ children }: { children: React.ReactNode }) {
+export function ClientLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
-    <>
-      <div className="flex h-screen overflow-hidden">
-        <Sidebar />
-        <main className="flex-1 overflow-y-auto">
+    <AuthProvider>
+      <ChatProvider>
+        <ProtectedRoute>
           {children}
-        </main>
-      </div>
-      <Toaster />
-    </>
+        </ProtectedRoute>
+      </ChatProvider>
+    </AuthProvider>
   );
 } 

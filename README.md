@@ -1,36 +1,144 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Agent Workflow and Architecture
 
-## Getting Started
+## Core Components
 
-First, run the development server:
+### 1. Agent Controller
+- **Purpose**: Central orchestrator for all agent activities
+- **Responsibilities**:
+  - Mode switching (Research/Case)
+  - Context management
+  - State synchronization
+  - Message routing
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+### 2. Research Agent
+- **Purpose**: Handles legal research and document analysis
+- **Capabilities**:
+  - Document search and analysis
+  - Citation extraction
+  - Legal precedent matching
+  - Contract drafting assistance
+  - Source verification
+
+### 3. Case Agent
+- **Purpose**: Manages case-specific operations
+- **Capabilities**:
+  - Case context tracking
+  - Document organization
+  - Timeline management
+  - Client information handling
+  - Case-specific contract drafting
+
+### 4. Memory System
+- **Short-term**: Current conversation context
+- **Long-term**: Previous cases and research
+- **Vector Store**: Semantic search capabilities
+- **Document Store**: File management
+
+## Workflow Sequences
+
+### 1. Research Mode Flow
+```mermaid
+sequenceDiagram
+    User->>Agent Controller: Research Query
+    Agent Controller->>Research Agent: Process Query
+    Research Agent->>Vector Store: Search Documents
+    Vector Store-->>Research Agent: Relevant Results
+    Research Agent->>Memory System: Update Context
+    Research Agent-->>Agent Controller: Formatted Response
+    Agent Controller-->>User: Display Results
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 2. Case Mode Flow
+```mermaid
+sequenceDiagram
+    User->>Agent Controller: Case Query
+    Agent Controller->>Case Agent: Process Query
+    Case Agent->>Memory System: Load Case Context
+    Case Agent->>Vector Store: Search Case Documents
+    Vector Store-->>Case Agent: Case-Specific Results
+    Case Agent->>Memory System: Update Case State
+    Case Agent-->>Agent Controller: Formatted Response
+    Agent Controller-->>User: Display Results
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## State Management
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### 1. Global State
+- Current mode (Research/Case)
+- User preferences
+- Authentication state
+- Active case/research context
 
-## Learn More
+### 2. Local State
+- Chat history
+- Document cache
+- UI state
+- Form data
 
-To learn more about Next.js, take a look at the following resources:
+### 3. Persistent State
+- Case records
+- Document metadata
+- User settings
+- Search history
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Integration Points
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### 1. External Services
+- **VectorDB (Redis)**:
+  - Document embeddings
+  - Semantic search
+  - Context storage
 
-## Deploy on Vercel
+- **Backend (Supabase)**:
+  - User management
+  - Document storage
+  - Case management
+  - Activity logging
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### 2. AI Models
+- **Text Generation**: Response creation
+- **Document Analysis**: Content extraction
+- **Classification**: Query routing
+- **Embedding**: Semantic search
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Error Handling
+
+### 1. Recovery Strategies
+- Automatic retry for transient failures
+- Graceful degradation
+- State rollback capabilities
+- User feedback mechanisms
+
+### 2. Error Types
+- Network failures
+- Model errors
+- Rate limiting
+- Data validation
+
+## Performance Optimizations
+
+### 1. Caching Strategy
+- Response caching
+- Document caching
+- Embedding caching
+- Context memoization
+
+### 2. Load Management
+- Request batching
+- Lazy loading
+- Progressive enhancement
+- Resource pooling
+
+## Security Measures
+
+### 1. Data Protection
+- End-to-end encryption
+- Secure storage
+- Access control
+- Audit logging
+
+### 2. User Safety
+- Content filtering
+- Rate limiting
+- Input validation
+- Output sanitization 
