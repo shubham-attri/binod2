@@ -2,7 +2,9 @@
 const config = {
   plugins: {
     tailwindcss: {},
+    autoprefixer: {},
   },
+  exclude: ['**/*.tsx', '**/*.ts'],
 };
 
 export default config;

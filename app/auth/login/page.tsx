@@ -9,7 +9,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 
 export default function LoginPage() {
-  const { signIn, isLoading } = useAuth();
+  const { signIn } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -25,17 +25,21 @@ export default function LoginPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('Form submitted with:', { email, password });
     setError("");
     setSuccess("");
 
     try {
-      console.log('Calling signIn...');
       await signIn(email, password);
-      console.log('SignIn completed successfully');
     } catch (err) {
-      console.error('SignIn error:', err);
-      setError(err instanceof Error ? err.message : "Failed to sign in");
+      // Extract error message from the error response
+      let errorMessage = "Failed to sign in";
+      if (err instanceof Error) {
+        errorMessage = err.message;
+      } else if (typeof err === 'object' && err !== null) {
+        // @ts-ignore
+        errorMessage = err.detail || err.message || errorMessage;
+      }
+      setError(errorMessage);
     }
   };
 
@@ -51,8 +55,14 @@ export default function LoginPage() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {success && (
-            <div className="text-sm text-green-500">
-              {success}
+            <div className="rounded-md bg-green-50 p-3">
+              <p className="text-sm text-green-600">{success}</p>
+            </div>
+          )}
+
+          {error && (
+            <div className="rounded-md bg-red-50 p-3">
+              <p className="text-sm text-red-600">{error}</p>
             </div>
           )}
 
@@ -63,6 +73,7 @@ export default function LoginPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
+              className="bg-background"
             />
           </div>
 
@@ -73,21 +84,15 @@ export default function LoginPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
+              className="bg-background"
             />
           </div>
-
-          {error && (
-            <div className="text-sm text-red-500">
-              {error}
-            </div>
-          )}
 
           <Button
             type="submit"
             className="w-full"
-            disabled={isLoading}
           >
-            {isLoading ? "Signing in..." : "Sign in"}
+            Sign in
           </Button>
         </form>
 
@@ -112,7 +117,7 @@ export default function LoginPage() {
         </div>
 
         <div className="text-center text-sm">
-          Don't have an account?{" "}
+          Don&apos;t have an account?{" "}
           <Link href="/auth/signup" className="text-primary hover:underline">
             Sign up
           </Link>

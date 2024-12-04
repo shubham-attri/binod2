@@ -19,10 +19,9 @@ def create_access_token(data: dict) -> str:
 
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Security(security)) -> User:
     """Get current user from JWT token"""
-    # If in development mode and DEV_MODE is True, bypass authentication
-    if settings.DEV_MODE:
-        return User(email=settings.DEV_ADMIN_EMAIL, is_active=True)
-
+    if not credentials:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+        
     try:
         token = credentials.credentials
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
@@ -30,27 +29,20 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Security(
         if email is None:
             raise HTTPException(status_code=401, detail="Invalid authentication token")
         token_data = TokenData(email=email)
+        return User(email=token_data.email, is_active=True)
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid authentication token")
-        
-    user = User(email=token_data.email, is_active=True)
-    return user 
 
-# Optional dependency for routes that don't require auth in dev mode
 async def get_optional_current_user(
     credentials: HTTPAuthorizationCredentials = Security(security)
-) -> Union[str, None]:
-    """Get current user from JWT token, but don't require it in dev mode"""
-    if settings.DEV_MODE:
-        return settings.DEV_ADMIN_EMAIL
-        
+) -> Optional[str]:
+    """Get current user from JWT token, but don't require it"""
     if not credentials:
         return None
         
     try:
         token = credentials.credentials
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        email: str = payload.get("sub")
-        return email if email else None
+        return payload.get("sub")
     except JWTError:
         return None

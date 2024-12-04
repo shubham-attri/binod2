@@ -1,4 +1,5 @@
 import { apiClient } from './api-client';
+import Cookies from 'js-cookie';
 
 export interface User {
   id: string;
@@ -17,45 +18,53 @@ class AuthService {
 
   constructor() {
     if (typeof window !== 'undefined') {
-      // Initialize session from localStorage if available
       const storedSession = localStorage.getItem('session');
       if (storedSession) {
         try {
           this.session = JSON.parse(storedSession);
           if (this.session?.access_token) {
             apiClient.setToken(this.session.access_token);
+            // Set token in cookie for middleware
+            Cookies.set('auth-token', this.session.access_token, { 
+              secure: true,
+              sameSite: 'lax'
+            });
           }
         } catch (error) {
           console.error('Error parsing stored session:', error);
-          localStorage.removeItem('session');
+          this.clearSession();
         }
       }
     }
   }
 
   async signIn(email: string, password: string): Promise<Session> {
-    console.log('AuthService: Starting sign in...');
-    const response = await apiClient.login(email, password);
-    console.log('AuthService: Login response received:', response);
-    
-    const user = await apiClient.getCurrentUser();
-    console.log('AuthService: User data received:', user);
-    
-    this.session = {
-      access_token: response.access_token,
-      user: user,
-    };
-    
-    console.log('AuthService: Session updated:', this.session);
-    localStorage.setItem('session', JSON.stringify(this.session));
-    
-    return this.session;
+    try {
+      // Clear any existing session
+      this.clearSession();
+      
+      // Login and get access token
+      const response = await apiClient.login(email, password);
+      
+      // Get user details
+      const user = await apiClient.getCurrentUser();
+      
+      // Create and store new session
+      this.session = {
+        access_token: response.access_token,
+        user: user,
+      };
+      
+      this.persistSession();
+      return this.session;
+    } catch (error) {
+      this.clearSession();
+      throw error;
+    }
   }
 
   async signOut(): Promise<void> {
-    this.session = null;
-    apiClient.setToken(null);
-    localStorage.removeItem('session');
+    this.clearSession();
   }
 
   getSession(): Session | null {
@@ -63,7 +72,30 @@ class AuthService {
   }
 
   isAuthenticated(): boolean {
-    return !!this.session?.access_token;
+    return !!this.session?.access_token && !!this.session?.user;
+  }
+
+  private clearSession() {
+    this.session = null;
+    apiClient.setToken(null);
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('session');
+      Cookies.remove('auth-token');
+    }
+  }
+
+  private persistSession() {
+    if (this.session && typeof window !== 'undefined') {
+      localStorage.setItem('session', JSON.stringify(this.session));
+      apiClient.setToken(this.session.access_token);
+      // Set token in cookie for middleware
+      if (this.session.access_token) {
+        Cookies.set('auth-token', this.session.access_token, { 
+          secure: true,
+          sameSite: 'lax'
+        });
+      }
+    }
   }
 }
 
