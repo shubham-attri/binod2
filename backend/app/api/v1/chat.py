@@ -1,67 +1,68 @@
-from fastapi import APIRouter, Depends, HTTPException
-from app.models.chat import ChatMessage, ChatContext
-from app.services.chat import ChatService
-from app.core import settings
-from app.core.security import get_optional_current_user
-from typing import Optional, Union
+from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import StreamingResponse
+from app.models.chat import ChatMessage, ChatRequest, ChatResponse
+from app.core.security import get_current_user
+from app.models.auth import User
+from app.services.ai import get_ai_response
+from datetime import datetime
+import json
 
 router = APIRouter()
-chat_service = ChatService()
 
-@router.post("/message")
-async def send_message(
-    message: str,
-    context_id: Optional[str] = None,
-    user_id: Union[str, None] = Depends(get_optional_current_user)
+@router.post("/chat", response_model=ChatResponse)
+async def chat(
+    request: ChatRequest,
+    current_user: User = Depends(get_current_user)
 ):
-    """Chat endpoint that maintains context in both dev and production modes"""
+    """Handle chat requests with optional streaming"""
     try:
-        # Get or create context
-        context = None
-        if context_id:
-            context = await chat_service.get_context(context_id)
-            if not context:
-                raise HTTPException(status_code=404, detail="Context not found")
+        # Check if client accepts streaming responses
+        headers = request.headers
+        accept_stream = headers.get("accept") == "text/event-stream"
+        
+        if accept_stream:
+            # Return streaming response
+            async def event_generator():
+                async for text in await get_ai_response(
+                    request.content,
+                    current_user,
+                    mode=request.mode,
+                    case_id=request.case_id,
+                    stream=True
+                ):
+                    yield f"data: {json.dumps({'content': text})}\n\n"
+                yield "data: [DONE]\n\n"
+            
+            return StreamingResponse(
+                event_generator(),
+                media_type="text/event-stream"
+            )
         else:
-            # Create new context with user info
-            metadata = {
-                "user_id": user_id or settings.DEV_ADMIN_EMAIL,
-                "mode": "development" if settings.DEV_MODE else "production"
-            }
-            context = await chat_service.create_context(metadata=metadata)
-            context_id = context.context_id
-
-        # Add user message to context
-        user_message = ChatMessage(role="user", content=message)
-        await chat_service.add_message(context_id, user_message)
-
-        # Get AI response
-        ai_message = await chat_service.get_response(message, context)
-        await chat_service.add_message(context_id, ai_message)
-
-        return {
-            "message": ai_message,
-            "context_id": context_id
-        }
-
+            # Return regular response
+            content = await get_ai_response(
+                request.content,
+                current_user,
+                mode=request.mode,
+                case_id=request.case_id,
+                stream=False
+            )
+            
+            return ChatResponse(
+                message=ChatMessage(
+                    role="assistant",
+                    content=content,
+                    created_at=datetime.utcnow().isoformat()
+                )
+            )
+            
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/context/{context_id}/messages")
-async def get_messages(
-    context_id: str,
-    user_id: Union[str, None] = Depends(get_optional_current_user)
+@router.get("/history")
+async def get_chat_history(
+    case_id: str = None,
+    current_user: User = Depends(get_current_user)
 ):
-    """Get messages for a specific context"""
-    try:
-        context = await chat_service.get_context(context_id)
-        if not context:
-            raise HTTPException(status_code=404, detail="Context not found")
-        
-        # In dev mode or if user owns the context, return messages
-        if settings.DEV_MODE or context.metadata.get("user_id") == user_id:
-            return context.messages
-        else:
-            raise HTTPException(status_code=403, detail="Not authorized to access this context")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) 
+    """Get chat history for user or specific case"""
+    # TODO: Implement chat history retrieval
+    pass 

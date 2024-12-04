@@ -1,4 +1,4 @@
-import { ChatResponse, ApiError, LoginResponse, User } from './types';
+import { ChatResponse, ChatRequest, ApiError, LoginResponse, User } from './types';
 
 class ApiClient {
   private baseUrl: string;
@@ -71,13 +71,66 @@ class ApiClient {
     return this.handleResponse<User>(response);
   }
 
-  async sendMessage(content: string): Promise<ChatResponse> {
+  async sendMessage(content: string, onChunk?: (chunk: string) => void): Promise<ChatResponse> {
+    const headers = this.getHeaders();
+    if (onChunk) {
+      headers['Accept'] = 'text/event-stream';
+    }
+
+    const request: ChatRequest = {
+      content,
+      mode: 'research'
+    };
+
     const response = await fetch(`${this.baseUrl}/chat`, {
       method: 'POST',
-      headers: this.getHeaders(),
-      body: JSON.stringify({ content }),
+      headers,
+      body: JSON.stringify(request),
       credentials: 'include',
     });
+
+    if (onChunk) {
+      // Handle streaming response
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      
+      if (!reader) {
+        throw new Error('Failed to get response reader');
+      }
+
+      let buffer = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        
+        // Process complete lines
+        buffer = lines.pop() || '';
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6);
+            if (data === '[DONE]') break;
+            try {
+              const chunk = JSON.parse(data);
+              onChunk(chunk.content);
+            } catch (e) {
+              console.error('Failed to parse chunk:', e);
+            }
+          }
+        }
+      }
+      
+      // Return final message
+      return {
+        message: {
+          role: 'assistant',
+          content: '', // Content already streamed
+          created_at: new Date().toISOString()
+        }
+      };
+    }
 
     return this.handleResponse<ChatResponse>(response);
   }

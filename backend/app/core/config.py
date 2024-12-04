@@ -22,8 +22,13 @@ class Settings(BaseSettings):
     SUPABASE_KEY: str
     SUPABASE_SERVICE_KEY: str
     
-    # AI
+    # Redis
+    REDIS_URL: str = "redis://localhost:6379"
+    REDIS_PASSWORD: str = None
+    
+    # Anthropic
     ANTHROPIC_API_KEY: str
+    ANTHROPIC_MODEL: str = "claude-3-opus-20240229"
     
     class Config:
         env_file = ".env"

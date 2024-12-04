@@ -1,14 +1,14 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api.v1 import chat, auth
-from app.core import settings
+from app.core.config import settings
+from app.api.v1.api import router as api_router
 
 app = FastAPI(
     title=settings.APP_NAME,
-    openapi_url=f"{settings.API_V1_PREFIX}/openapi.json",
+    openapi_url=f"{settings.API_V1_PREFIX}/openapi.json"
 )
 
-# Configure CORS
+# Set up CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.BACKEND_CORS_ORIGINS,
@@ -17,10 +17,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include routers
-app.include_router(auth.router, prefix=settings.API_V1_PREFIX + "/auth", tags=["auth"])
-app.include_router(chat.router, prefix=settings.API_V1_PREFIX + "/chat", tags=["chat"])
+# Include API router
+app.include_router(api_router, prefix=settings.API_V1_PREFIX)
 
-@app.get("/")
-async def root():
-    return {"message": "Welcome to Agent Binod API"} 
+# Health check endpoint
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy"} 
