@@ -6,31 +6,34 @@ from app.models.auth import User
 from app.services.ai import get_ai_response
 from datetime import datetime
 import json
+import logging
 
 router = APIRouter()
 
-@router.post("/chat", response_model=ChatResponse)
+@router.post("", response_model=ChatResponse)
 async def chat(
-    request: ChatRequest,
+    request: Request,
+    chat_request: ChatRequest,
     current_user: User = Depends(get_current_user)
 ):
     """Handle chat requests with optional streaming"""
     try:
         # Check if client accepts streaming responses
-        headers = request.headers
-        accept_stream = headers.get("accept") == "text/event-stream"
+        accept_header = request.headers.get("accept", "")
+        accept_stream = "text/event-stream" in accept_header.lower()
         
         if accept_stream:
             # Return streaming response
             async def event_generator():
                 async for text in await get_ai_response(
-                    request.content,
+                    chat_request.content,
                     current_user,
-                    mode=request.mode,
-                    case_id=request.case_id,
+                    mode=chat_request.mode,
+                    case_id=chat_request.case_id,
                     stream=True
                 ):
-                    yield f"data: {json.dumps({'content': text})}\n\n"
+                    if text:
+                        yield f"data: {json.dumps({'content': text})}\n\n"
                 yield "data: [DONE]\n\n"
             
             return StreamingResponse(
@@ -40,10 +43,10 @@ async def chat(
         else:
             # Return regular response
             content = await get_ai_response(
-                request.content,
+                chat_request.content,
                 current_user,
-                mode=request.mode,
-                case_id=request.case_id,
+                mode=chat_request.mode,
+                case_id=chat_request.case_id,
                 stream=False
             )
             
@@ -56,7 +59,11 @@ async def chat(
             )
             
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logging.error(f"Error in chat endpoint: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to process chat request: {str(e)}"
+        )
 
 @router.get("/history")
 async def get_chat_history(

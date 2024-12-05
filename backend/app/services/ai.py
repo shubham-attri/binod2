@@ -85,7 +85,7 @@ async def get_ai_response(
                             break
                     except asyncio.CancelledError:
                         break
-            
+            print("Streaming response generated")
             return response_generator()
         else:
             chat_model.streaming = False
