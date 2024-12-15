@@ -1,71 +1,108 @@
-from uuid import uuid4
+from typing import Optional, List, Dict
+from app.services.supabase import get_supabase_client
+from app.models.database import ChatSession, ChatMessage, ChatMode
+from app.services.ai_engine.base import AIEngine
+import uuid
 from datetime import datetime
-from langchain_anthropic import ChatAnthropic
-from langchain.schema import SystemMessage, HumanMessage
-from app.models.chat import ChatMessage, ChatContext
-from app.core.config import settings
-from app.core.supabase import get_supabase
 
 class ChatService:
     def __init__(self):
-        self.llm = ChatAnthropic(
-            anthropic_api_key=settings.ANTHROPIC_API_KEY,
-            model_name="claude-3-opus-20240229",
-            max_tokens=4000,
-            temperature=0.7
-        )
-        self.supabase = get_supabase()
+        self.supabase = get_supabase_client()
+        self.ai_engine = AIEngine()
 
-    async def get_context(self, context_id: str) -> ChatContext:
-        """Get chat context from Supabase"""
-        result = await self.supabase.table("chat_contexts").select("*").eq("id", context_id).single()
-        if not result:
-            return None
-        return ChatContext(**result)
-
-    async def create_context(self, metadata: dict = None) -> ChatContext:
-        """Create new chat context in Supabase"""
-        context_id = str(uuid4())
-        context = ChatContext(
-            context_id=context_id,
-            messages=[],
+    async def create_session(
+        self,
+        user_id: str,
+        mode: ChatMode,
+        case_id: Optional[str] = None,
+        metadata: Optional[Dict] = None
+    ) -> ChatSession:
+        """Create new chat session"""
+        session = ChatSession(
+            id=uuid.uuid4(),
+            user_id=user_id,
+            mode=mode,
+            case_id=case_id,
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow(),
             metadata=metadata
         )
-        await self.supabase.table("chat_contexts").insert(context.dict())
-        return context
-
-    async def add_message(self, context_id: str, message: ChatMessage) -> None:
-        """Add message to chat context in Supabase"""
-        await self.supabase.table("chat_messages").insert({
-            **message.dict(),
-            "context_id": context_id
-        })
-
-    async def get_response(self, message: str, context: ChatContext = None) -> ChatMessage:
-        """Get response from Anthropic Claude"""
-        messages = []
         
-        # Add system message
-        messages.append(SystemMessage(content="""You are Agent Binod, a powerful AI legal assistant. 
-        You help with legal research, case management, and document analysis. 
-        You are direct, professional, and always cite your sources."""))
+        await self.supabase.table("chat_sessions").insert(session.dict())
+        return session
 
-        # Add context messages
-        if context and context.messages:
-            for msg in context.messages[-5:]:  # Use last 5 messages for context
-                if msg.role == "user":
-                    messages.append(HumanMessage(content=msg.content))
-                else:
-                    messages.append(SystemMessage(content=msg.content))
+    async def get_session(self, session_id: str) -> Optional[ChatSession]:
+        """Get chat session by ID"""
+        result = await self.supabase.table("chat_sessions").select("*").eq("id", session_id).single()
+        return ChatSession(**result) if result else None
 
-        # Add current message
-        messages.append(HumanMessage(content=message))
-
-        # Get response
-        response = await self.llm.agenerate([messages])
+    async def add_message(
+        self,
+        session_id: str,
+        role: str,
+        content: str,
+        metadata: Optional[Dict] = None
+    ) -> ChatMessage:
+        """Add message to chat session"""
+        message = ChatMessage(
+            id=uuid.uuid4(),
+            session_id=session_id,
+            role=role,
+            content=content,
+            created_at=datetime.utcnow(),
+            metadata=metadata
+        )
         
-        return ChatMessage(
-            role="assistant",
-            content=response.generations[0][0].text,
-            created_at=datetime.utcnow()
-        ) 
+        # Update session
+        await self.supabase.table("chat_sessions").update({
+            "updated_at": datetime.utcnow().isoformat()
+        }).eq("id", session_id)
+        
+        # Insert message
+        await self.supabase.table("chat_messages").insert(message.dict())
+        return message
+
+    async def get_session_messages(
+        self,
+        session_id: str,
+        limit: int = 50,
+        before_id: Optional[str] = None
+    ) -> List[ChatMessage]:
+        """Get chat messages for session with pagination"""
+        query = self.supabase.table("chat_messages").select("*").eq("session_id", session_id)
+        
+        if before_id:
+            query = query.lt("id", before_id)
+            
+        query = query.order("created_at", desc=True).limit(limit)
+        result = await query.execute()
+        
+        messages = [ChatMessage(**msg) for msg in result.data]
+        return list(reversed(messages))  # Return in chronological order
+
+    async def get_user_sessions(
+        self,
+        user_id: str,
+        mode: Optional[ChatMode] = None,
+        case_id: Optional[str] = None,
+        limit: int = 10
+    ) -> List[ChatSession]:
+        """Get chat sessions for user"""
+        query = self.supabase.table("chat_sessions").select("*").eq("user_id", user_id)
+        
+        if mode:
+            query = query.eq("mode", mode)
+        if case_id:
+            query = query.eq("case_id", case_id)
+            
+        query = query.order("updated_at", desc=True).limit(limit)
+        result = await query.execute()
+        
+        return [ChatSession(**session) for session in result.data]
+
+    async def delete_session(self, session_id: str):
+        """Delete chat session and all its messages"""
+        # Delete messages first (foreign key constraint)
+        await self.supabase.table("chat_messages").delete().eq("session_id", session_id)
+        # Delete session
+        await self.supabase.table("chat_sessions").delete().eq("id", session_id) 

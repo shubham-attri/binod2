@@ -10,12 +10,16 @@ import { MarkdownRenderer } from "./markdown-renderer";
 import type { ChatMessage } from "../../lib/types";
 import { useAuth } from "@/lib/auth-context";
 import { useChat } from "@/lib/chat-context";
+import { Send } from "lucide-react";
+import { DocumentPanel } from "@/components/research/document-panel";
 
 interface ChatInterfaceProps {
   className?: string;
+  mode?: 'research' | 'case';
+  caseId?: string;
 }
 
-export function ChatInterface({ className }: ChatInterfaceProps) {
+export function ChatInterface({ className, mode = 'research', caseId }: ChatInterfaceProps) {
   const { user } = useAuth();
   const { messages, sendMessage, isLoading } = useChat();
   const [input, setInput] = useState("");
@@ -58,6 +62,17 @@ export function ChatInterface({ className }: ChatInterfaceProps) {
 
   return (
     <Card className={cn("flex h-[600px] flex-col", className)}>
+      <div className="flex items-center justify-between border-b px-4 py-3">
+        <div className="flex items-center gap-2">
+          <h2 className="text-lg font-semibold">
+            {mode === 'case' ? 'Case Assistant' : 'Research Assistant'}
+          </h2>
+        </div>
+        <div className="flex items-center gap-2">
+          <DocumentPanel caseId={mode === 'case' ? caseId : undefined} />
+        </div>
+      </div>
+      
       <ScrollArea className="flex-1 p-4">
         <div className="space-y-4" ref={scrollRef}>
           {messages.map((message: ChatMessage) => (
@@ -86,6 +101,7 @@ export function ChatInterface({ className }: ChatInterfaceProps) {
           ))}
         </div>
       </ScrollArea>
+
       <div className="flex items-center gap-2 border-t p-4">
         <Input
           placeholder="Type your message..."
@@ -95,24 +111,13 @@ export function ChatInterface({ className }: ChatInterfaceProps) {
           disabled={isLoading || !user}
           className="flex-1"
         />
+
         <Button
           onClick={handleSend}
           disabled={isLoading || !input.trim() || !user}
           size="icon"
         >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className="h-4 w-4"
-          >
-            <path d="M22 2L11 13" />
-            <path d="M22 2L15 22L11 13L2 9L22 2Z" />
-          </svg>
+          <Send className="h-5 w-5" />
           <span className="sr-only">Send message</span>
         </Button>
       </div>

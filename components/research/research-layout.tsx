@@ -1,7 +1,7 @@
+"use client";
+
 import React from "react";
 import { ChatInterface } from "../chat/chat-interface";
-import { DocumentPanel } from "./document-panel";
-import { ResearchContext } from "./research-context";
 import { useChat } from "@/hooks/use-chat";
 
 interface ResearchLayoutProps {
@@ -21,21 +21,14 @@ export function ResearchLayout({ className }: ResearchLayoutProps) {
   });
 
   return (
-    <div className="grid h-full grid-cols-[1fr,320px] gap-4">
+    <div className="h-full">
       {/* Main Chat Area */}
-      <div className="flex flex-col">
-        <ChatInterface
-          messages={messages}
-          isLoading={isLoading}
-          onSendMessage={sendMessage}
-          className="flex-1"
-        />
-      </div>
-
-      {/* Document Panel */}
-      <div className="border-l">
-        <DocumentPanel />
-      </div>
+      <ChatInterface
+        messages={messages}
+        isLoading={isLoading}
+        onSendMessage={sendMessage}
+        className="h-full"
+      />
     </div>
   );
 } 

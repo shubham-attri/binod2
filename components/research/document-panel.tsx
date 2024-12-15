@@ -1,89 +1,118 @@
 "use client";
 
-import React from "react";
-import { Button } from "../ui/button";
-import { Input } from "../ui/input";
-import { ScrollArea } from "../ui/scroll-area";
-import { Card } from "../ui/card";
-
-export interface Document {
-  id: string;
-  title: string;
-  type: "pdf" | "doc" | "txt";
-  url: string;
-  excerpt?: string;
-}
+import { useState, useEffect } from "react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { FileText } from "lucide-react";
+import { DocumentUpload } from "@/components/documents/document-upload";
+import { DocumentList } from "@/components/documents/document-list";
+import { Badge } from "@/components/ui/badge";
+import { apiClient } from "@/lib/api-client";
+import type { Document } from "@/lib/types";
 
 interface DocumentPanelProps {
-  documents?: Document[];
-  onSearch?: (query: string) => void;
-  onDocumentSelect?: (document: Document) => void;
-  isLoading?: boolean;
+  caseId?: string;
 }
 
-export function DocumentPanel({
-  documents = [],
-  onSearch,
-  onDocumentSelect,
-  isLoading = false,
-}: DocumentPanelProps) {
+export function DocumentPanel({ caseId }: DocumentPanelProps) {
+  const [open, setOpen] = useState(false);
+  const [selectedDocument, setSelectedDocument] = useState<Document | null>(null);
+  const [documentCount, setDocumentCount] = useState(0);
+
+  useEffect(() => {
+    // Load document count on mount
+    const loadDocumentCount = async () => {
+      try {
+        const documents = await apiClient.listDocuments(caseId);
+        setDocumentCount(documents.length);
+      } catch (error) {
+        console.error("Failed to load documents:", error);
+      }
+    };
+    loadDocumentCount();
+  }, [caseId]);
+
+  const handleUploadComplete = async (document: Document) => {
+    // Update document count
+    setDocumentCount(prev => prev + 1);
+    // Switch to documents tab
+    const docsTab = document.querySelector('[data-tab="documents"]') as HTMLElement;
+    if (docsTab) docsTab.click();
+  };
+
+  const handleUploadError = (error: Error) => {
+    console.error("Upload failed:", error);
+    // TODO: Show error toast
+  };
+
+  const handleDocumentSelect = (document: Document) => {
+    setSelectedDocument(document);
+    // TODO: Show document preview
+  };
+
+  const handleDocumentDelete = () => {
+    // Update document count
+    setDocumentCount(prev => Math.max(0, prev - 1));
+  };
+
   return (
-    <div className="flex h-full flex-col">
-      <div className="border-b p-4">
-        <Input
-          placeholder="Search documents..."
-          onChange={(e) => onSearch?.(e.target.value)}
-          className="w-full"
-        />
-      </div>
-      <ScrollArea className="flex-1">
-        <div className="space-y-2 p-4">
-          {documents.map((doc) => (
-            <Card
-              key={doc.id}
-              className="cursor-pointer p-3 hover:bg-muted/50"
-              onClick={() => onDocumentSelect?.(doc)}
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="relative flex items-center justify-center hover:bg-accent"
+          aria-label="Toggle Documents Panel"
+        >
+          <FileText className="h-5 w-5" />
+          {documentCount > 0 && (
+            <Badge 
+              variant="secondary" 
+              className="absolute -top-2 -right-2 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs"
             >
-              <div className="flex items-start justify-between">
-                <div>
-                  <h4 className="font-medium">{doc.title}</h4>
-                  {doc.excerpt && (
-                    <p className="mt-1 text-sm text-muted-foreground line-clamp-2">
-                      {doc.excerpt}
-                    </p>
-                  )}
-                </div>
-                <Button variant="ghost" size="icon">
-                  <FileIcon className="h-4 w-4" />
-                </Button>
-              </div>
-            </Card>
-          ))}
-          {isLoading && (
-            <div className="flex justify-center p-4">
-              <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-            </div>
+              {documentCount}
+            </Badge>
           )}
-        </div>
-      </ScrollArea>
-    </div>
-  );
-}
-
-function FileIcon(props: React.SVGProps<SVGSVGElement>) {
-  return (
-    <svg
-      {...props}
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
-      <polyline points="14 2 14 8 20 8" />
-    </svg>
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-[540px] p-0">
+        <DialogHeader className="p-6 pb-0">
+          <DialogTitle>Documents</DialogTitle>
+        </DialogHeader>
+        
+        <Tabs defaultValue="documents" className="h-full">
+          <TabsList className="px-6">
+            <TabsTrigger value="documents" data-tab="documents">
+              All Documents
+              {documentCount > 0 && (
+                <Badge variant="secondary" className="ml-2">
+                  {documentCount}
+                </Badge>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="upload">Upload</TabsTrigger>
+          </TabsList>
+          
+          <div className="px-6 py-4">
+            <TabsContent value="documents" className="m-0">
+              <DocumentList
+                caseId={caseId}
+                onDocumentSelect={handleDocumentSelect}
+                onDocumentDelete={handleDocumentDelete}
+              />
+            </TabsContent>
+            
+            <TabsContent value="upload" className="m-0">
+              <DocumentUpload
+                caseId={caseId}
+                onUploadComplete={handleUploadComplete}
+                onUploadError={handleUploadError}
+              />
+            </TabsContent>
+          </div>
+        </Tabs>
+      </DialogContent>
+    </Dialog>
   );
 } 

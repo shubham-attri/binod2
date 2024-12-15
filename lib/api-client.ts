@@ -1,4 +1,4 @@
-import { ChatResponse, ChatRequest, ApiError, LoginResponse, User } from './types';
+import { ChatResponse, ChatRequest, ApiError, LoginResponse, User, Document, Case, CaseActivity } from './types';
 
 class ApiClient {
   private baseUrl: string;
@@ -133,6 +133,118 @@ class ApiClient {
     }
 
     return this.handleResponse<ChatResponse>(response);
+  }
+
+  async uploadDocument(
+    file: File,
+    caseId?: string,
+    chatSessionId?: string
+  ): Promise<Document> {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (caseId) formData.append('case_id', caseId);
+    if (chatSessionId) formData.append('chat_session_id', chatSessionId);
+
+    const response = await fetch(`${this.baseUrl}/documents/upload`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${this.token}` },
+      body: formData
+    });
+
+    return this.handleResponse<Document>(response);
+  }
+
+  async getDocument(documentId: string): Promise<Document> {
+    const response = await fetch(`${this.baseUrl}/documents/${documentId}`, {
+      headers: this.getHeaders()
+    });
+    return this.handleResponse<Document>(response);
+  }
+
+  async listDocuments(caseId?: string, chatSessionId?: string): Promise<Document[]> {
+    const params = new URLSearchParams();
+    if (caseId) params.append('case_id', caseId);
+    if (chatSessionId) params.append('chat_session_id', chatSessionId);
+
+    const response = await fetch(`${this.baseUrl}/documents/list?${params}`, {
+      headers: this.getHeaders()
+    });
+    return this.handleResponse<Document[]>(response);
+  }
+
+  async deleteDocument(documentId: string): Promise<void> {
+    const response = await fetch(`${this.baseUrl}/documents/${documentId}`, {
+      method: 'DELETE',
+      headers: this.getHeaders()
+    });
+    await this.handleResponse<void>(response);
+  }
+
+  async createCase(title: string, description: string, metadata?: any): Promise<Case> {
+    const response = await fetch(`${this.baseUrl}/cases`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify({ title, description, metadata })
+    });
+    return this.handleResponse<Case>(response);
+  }
+
+  async getCase(caseId: string): Promise<Case> {
+    const response = await fetch(`${this.baseUrl}/cases/${caseId}`, {
+      headers: this.getHeaders()
+    });
+    return this.handleResponse<Case>(response);
+  }
+
+  async updateCase(
+    caseId: string,
+    updates: {
+      title?: string;
+      description?: string;
+      status?: string;
+      metadata?: any;
+    }
+  ): Promise<Case> {
+    const response = await fetch(`${this.baseUrl}/cases/${caseId}`, {
+      method: 'PUT',
+      headers: this.getHeaders(),
+      body: JSON.stringify(updates)
+    });
+    return this.handleResponse<Case>(response);
+  }
+
+  async listCases(status?: string): Promise<Case[]> {
+    const params = new URLSearchParams();
+    if (status) params.append('status', status);
+
+    const response = await fetch(`${this.baseUrl}/cases?${params}`, {
+      headers: this.getHeaders()
+    });
+    return this.handleResponse<Case[]>(response);
+  }
+
+  async getCaseActivities(
+    caseId: string,
+    limit: number = 50,
+    beforeId?: string
+  ): Promise<CaseActivity[]> {
+    const params = new URLSearchParams({
+      limit: limit.toString()
+    });
+    if (beforeId) params.append('before_id', beforeId);
+
+    const response = await fetch(`${this.baseUrl}/cases/${caseId}/activities?${params}`, {
+      headers: this.getHeaders()
+    });
+    return this.handleResponse<CaseActivity[]>(response);
+  }
+
+  async archiveCase(caseId: string): Promise<Case> {
+    const response = await fetch(`${this.baseUrl}/cases/${caseId}/archive`, {
+      method: 'POST',
+      headers: this.getHeaders()
+    });
+    return this.handleResponse<Case>(response);
   }
 }
 
