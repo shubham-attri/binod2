@@ -1,1 +1,26 @@
- 
+[tool.poetry]
+name = "agent-binod"
+version = "0.1.0"
+description = "Legal AI Assistant Backend"
+authors = ["Your Name <your.email@example.com>"]
+
+[tool.poetry.dependencies]
+python = "^3.9"
+fastapi = "^0.109.2"
+uvicorn = {extras = ["standard"], version = "^0.27.1"}
+python-jose = {extras = ["cryptography"], version = "^3.3.0"}
+redis = "5.0.1"
+anthropic = "0.18.1"
+langchain = "0.1.6"
+langchain-anthropic = "0.1.1"
+langchain-core = "0.1.22"
+python-multipart = "^0.0.9"
+pydantic = "^2.6.1"
+pydantic-settings = "2.1.0"
+python-dotenv = "1.0.0"
+httpx = "0.25.2"
+supabase = "2.3.4"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api" 

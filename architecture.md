@@ -225,4 +225,7 @@ This architecture provides a secure, scalable, and feature-rich platform for a l
 • FastAPI and Langchain-based ChatAnthropic handle the AI conversation flow, context retrieval, and streaming answers.  
 • The Next.js 14 front-end offers an accessible dual-mode interface, either for broad legal research or for case-specific operations—both integrated into an “Open Canvas” style framework to handle complex workflows.  
 
-By structuring the project in this step-by-step fashion, each critical part (chat system, document management, case handling, advanced search, and user security) interlocks tightly to support a professional legal workflow with powerful AI capabilities. 
+By structuring the project in this step-by-step fashion, each critical part (chat system, document management, case handling, advanced search, and user security) interlocks tightly to support a professional legal workflow with powerful AI capabilities.
+
+
+
