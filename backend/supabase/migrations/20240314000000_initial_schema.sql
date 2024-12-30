@@ -4,6 +4,7 @@ DROP TABLE IF EXISTS documents CASCADE;
 DROP TABLE IF EXISTS chat_messages CASCADE;
 DROP TABLE IF EXISTS chat_contexts CASCADE;
 DROP TABLE IF EXISTS cases CASCADE;
+DROP TABLE IF EXISTS research_sessions CASCADE;
 
 -- Enable necessary extensions
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
@@ -70,12 +71,30 @@ CREATE TABLE IF NOT EXISTS case_activities (
     metadata JSONB
 );
 
+-- Add research_session table to track research sessions
+CREATE TABLE IF NOT EXISTS research_sessions (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES auth.users(id),
+    title TEXT NOT NULL,
+    description TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    metadata JSONB
+);
+
+-- Update documents table to handle research mode better
+ALTER TABLE documents ADD COLUMN IF NOT EXISTS research_session_id UUID REFERENCES research_sessions(id);
+ALTER TABLE documents ADD COLUMN IF NOT EXISTS document_type TEXT CHECK (document_type IN ('research', 'case'));
+ALTER TABLE documents ADD COLUMN IF NOT EXISTS folder_path TEXT; -- For organization
+ALTER TABLE documents ADD COLUMN IF NOT EXISTS tags TEXT[]; -- For categorization
+
 -- Enable Row Level Security
 ALTER TABLE cases ENABLE ROW LEVEL SECURITY;
 ALTER TABLE chat_contexts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE chat_messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE documents ENABLE ROW LEVEL SECURITY;
 ALTER TABLE case_activities ENABLE ROW LEVEL SECURITY;
+ALTER TABLE research_sessions ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policies
 CREATE POLICY "Users can view their own cases"
@@ -118,10 +137,26 @@ CREATE POLICY "Users can create messages in their sessions"
 
 CREATE POLICY "Users can view their own documents"
     ON documents FOR SELECT
+    USING (auth.uid() = user_id::uuid);
+
+CREATE POLICY "Users can insert their own documents"
+    ON documents FOR INSERT
+    WITH CHECK (auth.uid() = user_id::uuid);
+
+CREATE POLICY "Users can update their own documents"
+    ON documents FOR UPDATE
+    USING (auth.uid() = user_id::uuid);
+
+CREATE POLICY "Users can delete their own documents"
+    ON documents FOR DELETE
+    USING (auth.uid() = user_id::uuid);
+
+CREATE POLICY "Users can view their own research sessions"
+    ON research_sessions FOR SELECT
     USING (auth.uid() = user_id);
 
-CREATE POLICY "Users can create their own documents"
-    ON documents FOR INSERT
+CREATE POLICY "Users can create their own research sessions"
+    ON research_sessions FOR INSERT
     WITH CHECK (auth.uid() = user_id);
 
 -- Indexes
