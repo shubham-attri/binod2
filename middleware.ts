@@ -24,16 +24,14 @@ export async function middleware(req: NextRequest) {
     return res;
   }
 
-  // Get token from cookie or authorization header
-  const token = req.cookies.get('auth-token')?.value || 
-                req.headers.get('authorization')?.split(' ')[1];
+  // Get token from cookie
+  const token = req.cookies.get('auth-token')?.value;
 
   let isAuthenticated = false;
   
   if (token) {
     try {
-      // Verify token
-      const secret = new TextEncoder().encode(process.env.SECRET_KEY || '09d25e094faa6ca2556c818166b7a9563b93f7099f6f0f4caa6cf63b88e8d3e7');
+      const secret = new TextEncoder().encode(process.env.SECRET_KEY!);
       await jwtVerify(token, secret);
       isAuthenticated = true;
     } catch (error) {
@@ -42,22 +40,13 @@ export async function middleware(req: NextRequest) {
     }
   }
 
-  console.log('Middleware: Processing request', {
-    path: req.nextUrl.pathname,
-    isPublicRoute,
-    isAuthRoute,
-    isAuthenticated
-  });
-
   // If user is authenticated and tries to access auth routes, redirect to research
   if (isAuthenticated && isAuthRoute) {
-    console.log('Middleware: Authenticated user trying to access auth route, redirecting to research');
     return NextResponse.redirect(new URL('/research', req.url));
   }
 
   // If user is not authenticated and tries to access protected routes, redirect to login
   if (!isAuthenticated && !isPublicRoute) {
-    console.log('Middleware: Unauthenticated user trying to access protected route, redirecting to login');
     return NextResponse.redirect(new URL('/auth/login', req.url));
   }
 

@@ -15,28 +15,42 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const router = useRouter();
-  const pathname = usePathname();
 
   // Handle initial session check
   useEffect(() => {
-    const session = auth.getSession();
-    if (session?.user) {
-      setUser(session.user);
-      if (pathname.startsWith('/auth/')) {
-        router.push('/research');
+    const checkSession = async () => {
+      try {
+        const response = await fetch('/api/v1/auth/me', {
+          credentials: 'include' // This is important for cookies
+        });
+        if (response.ok) {
+          const userData = await response.json();
+          setUser(userData);
+        }
+      } catch (error) {
+        console.error('Session check failed:', error);
       }
-    }
-  }, [pathname, router]);
+    };
+    
+    checkSession();
+  }, []);
 
   const signIn = async (email: string, password: string) => {
     try {
-      const session = await auth.signIn(email, password);
-      if (session?.user) {
-        setUser(session.user);
-        await router.push('/research');
-      } else {
-        throw new Error('Login successful but no user data received');
+      const response = await fetch('/api/v1/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+        credentials: 'include'
+      });
+
+      if (!response.ok) {
+        throw new Error('Login failed');
       }
+
+      const data = await response.json();
+      setUser(data.user);
+      router.push('/research');
     } catch (error) {
       console.error('Sign in error:', error);
       throw error;
@@ -45,32 +59,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = async () => {
     try {
-      await auth.signOut();
+      await fetch('/api/v1/auth/logout', {
+        method: 'POST',
+        credentials: 'include'
+      });
       setUser(null);
-      await router.push('/auth/login');
+      router.push('/auth/login');
     } catch (error) {
       console.error('Sign out error:', error);
       throw error;
     }
   };
 
-  const value = {
-    user,
-    signIn,
-    signOut,
-  };
-
   return (
-    <AuthContext.Provider value={value}>
+    <AuthContext.Provider value={{ user, signIn, signOut }}>
       {children}
     </AuthContext.Provider>
   );
 }
 
-export function useAuth() {
+export const useAuth = () => {
   const context = useContext(AuthContext);
   if (context === undefined) {
     throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;
-} 
+}; 
