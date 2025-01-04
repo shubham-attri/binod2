@@ -1,13 +1,11 @@
 from pydantic import BaseModel
-from typing import Optional
+
+class User(BaseModel):
+    id: str
+    email: str
+    is_active: bool = True
 
 class Token(BaseModel):
     access_token: str
     token_type: str
-
-class TokenData(BaseModel):
-    email: Optional[str] = None
-
-class User(BaseModel):
-    email: str
-    is_active: bool = True 
+    expires_in: int 
