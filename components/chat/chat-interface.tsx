@@ -33,12 +33,13 @@ export function ChatInterface({ className, mode = 'research', caseId }: ChatInte
   }, [messages]);
 
   const handleSend = async () => {
-    if (!input.trim() || isLoading || !user) return;
+    if (!input.trim() || isLoading) return;
     
     const message = input.trim();
     setInput("");
     
     try {
+      console.log('Sending message:', message); // Debug log
       await sendMessage(message);
     } catch (error) {
       console.error('Failed to send message:', error);
@@ -108,13 +109,13 @@ export function ChatInterface({ className, mode = 'research', caseId }: ChatInte
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          disabled={isLoading || !user}
+          disabled={isLoading}
           className="flex-1"
         />
 
         <Button
           onClick={handleSend}
-          disabled={isLoading || !input.trim() || !user}
+          disabled={isLoading || !input.trim()}
           size="icon"
         >
           <Send className="h-5 w-5" />
