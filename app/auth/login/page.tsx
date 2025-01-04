@@ -6,15 +6,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 
 export default function LoginPage() {
-  const { signIn } = useAuth();
+  const { signIn, user, isLoading } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const searchParams = useSearchParams();
+  const router = useRouter();
 
   useEffect(() => {
     const message = searchParams.get("message");
@@ -23,6 +24,14 @@ export default function LoginPage() {
     }
   }, [searchParams]);
 
+  useEffect(() => {
+    console.log('Login page effect:', { user, isLoading });
+    if (user && !isLoading) {
+      console.log('User exists, redirecting to research');
+      router.push('/research');
+    }
+  }, [user, isLoading, router]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
@@ -30,8 +39,8 @@ export default function LoginPage() {
 
     try {
       await signIn(email, password);
+      console.log('Sign in successful');
     } catch (err) {
-      // Extract error message from the error response
       let errorMessage = "Failed to sign in";
       if (err instanceof Error) {
         errorMessage = err.message;
@@ -40,6 +49,7 @@ export default function LoginPage() {
         errorMessage = err.detail || err.message || errorMessage;
       }
       setError(errorMessage);
+      console.error('Login error:', err);
     }
   };
 
