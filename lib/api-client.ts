@@ -5,14 +5,28 @@ class ApiClient {
   private token: string | null = null;
 
   constructor() {
-    this.baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+    this.baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    console.log('API Client: Initializing', { hasToken: !!this.getStoredToken() });
+    this.initializeToken();
+  }
+
+  private getStoredToken(): string | null {
     if (typeof window !== 'undefined') {
       const session = localStorage.getItem('session');
       if (session) {
-        const { access_token } = JSON.parse(session);
-        this.token = access_token;
+        try {
+          const { access_token } = JSON.parse(session);
+          return access_token;
+        } catch (e) {
+          console.error('Failed to parse session:', e);
+        }
       }
     }
+    return null;
+  }
+
+  private initializeToken() {
+    this.token = this.getStoredToken();
   }
 
   setToken(token: string | null) {
@@ -71,66 +85,29 @@ class ApiClient {
     return this.handleResponse<User>(response);
   }
 
-  async sendMessage(content: string, onChunk?: (chunk: string) => void): Promise<ChatResponse> {
+  async sendMessage(content: string): Promise<ChatResponse> {
+    const token = this.getStoredToken();
+    console.log('API Client: Sending message', { 
+      content, 
+      hasToken: !!token,
+      tokenValue: token?.substring(0, 10) + '...'
+    });
+    
     const headers = this.getHeaders();
-    if (onChunk) {
-      headers['Accept'] = 'text/event-stream';
-    }
+    const request: ChatRequest = { content };
 
-    const request: ChatRequest = {
-      content,
-      mode: 'research'
-    };
-
-    const response = await fetch(`${this.baseUrl}/chat`, {
+    const response = await fetch(`${this.baseUrl}/api/v1/chat`, {
       method: 'POST',
       headers,
       body: JSON.stringify(request),
       credentials: 'include',
     });
 
-    if (onChunk) {
-      // Handle streaming response
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
-      
-      if (!reader) {
-        throw new Error('Failed to get response reader');
-      }
-
-      let buffer = '';
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        
-        // Process complete lines
-        buffer = lines.pop() || '';
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const data = line.slice(6);
-            if (data === '[DONE]') break;
-            try {
-              const chunk = JSON.parse(data);
-              onChunk(chunk.content);
-            } catch (e) {
-              console.error('Failed to parse chunk:', e);
-            }
-          }
-        }
-      }
-      
-      // Return final message
-      return {
-        message: {
-          role: 'assistant',
-          content: '', // Content already streamed
-          created_at: new Date().toISOString()
-        }
-      };
-    }
+    console.log('API Client: Response', { 
+      status: response.status,
+      url: response.url,
+      authHeader: headers['Authorization']?.substring(0, 20) + '...'
+    });
 
     return this.handleResponse<ChatResponse>(response);
   }
