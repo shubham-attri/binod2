@@ -1,13 +1,11 @@
 "use client";
 
-import React, { createContext, useContext, useState, useCallback } from 'react';
-import { ChatMessage } from './types';
-import { apiClient } from './api-client';
+import React, { createContext, useContext, useState } from "react";
+import type { ChatMessage } from "./types";
 
 interface ChatContextType {
   messages: ChatMessage[];
   isLoading: boolean;
-  error: Error | null;
   sendMessage: (content: string) => Promise<void>;
   clearMessages: () => void;
 }
@@ -17,69 +15,59 @@ const ChatContext = createContext<ChatContextType | undefined>(undefined);
 export function ChatProvider({ children }: { children: React.ReactNode }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<Error | null>(null);
-  const [streamingMessage, setStreamingMessage] = useState<string>('');
+  const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
 
-  const sendMessage = useCallback(async (content: string) => {
+  const sendMessage = async (content: string) => {
     try {
       setIsLoading(true);
-      setError(null);
-      setStreamingMessage('');
-
-      // Add user message
+      
+      // Add user message immediately
       const userMessage: ChatMessage = {
-        id: Math.random().toString(36).substring(7),
-        role: 'user',
+        id: Date.now().toString(),
         content,
-        created_at: new Date().toISOString(),
+        role: 'user',
+        created_at: new Date().toISOString()
       };
       setMessages(prev => [...prev, userMessage]);
 
-      // Create placeholder for assistant message
+      // Send to backend
+      const token = localStorage.getItem('auth_token');
+      const response = await fetch(`${BACKEND_URL}/api/v1/chat/message`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ message: content })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to send message');
+      }
+
+      const data = await response.json();
+      
+      // Add assistant response
       const assistantMessage: ChatMessage = {
-        id: Math.random().toString(36).substring(7),
+        id: Date.now().toString() + '-assistant',
+        content: data.response,
         role: 'assistant',
-        content: '',
-        created_at: new Date().toISOString(),
+        created_at: new Date().toISOString()
       };
       setMessages(prev => [...prev, assistantMessage]);
 
-      // Get AI response with streaming
-      await apiClient.sendMessage(content, (chunk) => {
-        setStreamingMessage(prev => prev + chunk);
-        // Update the last message (assistant's message)
-        setMessages(prev => {
-          const newMessages = [...prev];
-          newMessages[newMessages.length - 1].content = newMessages[newMessages.length - 1].content + chunk;
-          return newMessages;
-        });
-      });
-
-    } catch (err) {
-      setError(err instanceof Error ? err : new Error('Failed to send message'));
-      throw err;
+    } catch (error) {
+      console.error('Message send error:', error);
+      throw error;
     } finally {
       setIsLoading(false);
-      setStreamingMessage('');
     }
-  }, []);
+  };
 
-  const clearMessages = useCallback(() => {
-    setMessages([]);
-    setError(null);
-    setStreamingMessage('');
-  }, []);
+  const clearMessages = () => setMessages([]);
 
   return (
-    <ChatContext.Provider
-      value={{
-        messages,
-        isLoading,
-        error,
-        sendMessage,
-        clearMessages,
-      }}
-    >
+    <ChatContext.Provider value={{ messages, isLoading, sendMessage, clearMessages }}>
       {children}
     </ChatContext.Provider>
   );

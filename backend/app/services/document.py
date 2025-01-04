@@ -1,84 +1,79 @@
 from typing import List, Optional
 from app.models.document import Document
 from app.core.supabase import get_supabase_client
+from app.core.config import get_settings
 from datetime import datetime
-from fastapi import HTTPException
+from fastapi import HTTPException, UploadFile
+import uuid
+import logging
+
+logger = logging.getLogger(__name__)
+settings = get_settings()
 
 class DocumentService:
     def __init__(self):
         self.supabase = get_supabase_client()
 
-    async def list_documents(
-        self,
-        user_id: str,
-        case_id: Optional[str] = None,
-        session_id: Optional[str] = None
-    ) -> List[Document]:
+    async def save_file(self, file: UploadFile, user_id: str, mode: str = 'research') -> Document:
+        """Save file to Supabase storage and create document record"""
         try:
-            # First get user's UUID from email
-            user_result = await self.supabase.from_('users').select('id').eq('email', user_id).single().execute()
-            if not user_result.data:
-                raise HTTPException(status_code=404, detail="User not found")
+            # Read file content
+            content = await file.read()
             
-            user_uuid = user_result.data['id']
+            # Use existing folder structure
+            storage_path = f"{user_id}/{mode}/{uuid.uuid4()}.{file.filename.split('.')[-1]}"
             
-            # Now query documents with UUID
-            query = self.supabase.table('documents').select('*')
-            query = query.eq('user_id', user_uuid)
-            
-            if case_id:
-                query = query.eq('case_id', case_id)
-            if session_id:
-                query = query.eq('session_id', session_id)
-            
-            result = await query.execute()
-            return [Document(**doc) for doc in result.data]
+            # Upload to documents bucket
+            storage_response = await self.supabase.storage \
+                .from_('documents') \
+                .upload(storage_path, content)
+
+            if not storage_response.data:
+                raise HTTPException(status_code=500, detail="Storage upload failed")
+
+            # Get public URL
+            file_url = self.supabase.storage \
+                .from_('documents') \
+                .get_public_url(storage_path)
+
+            # Create document record using existing schema
+            document_data = {
+                "id": str(uuid.uuid4()),
+                "title": file.filename,
+                "created_at": datetime.utcnow(),
+                "updated_at": datetime.utcnow(),
+                "user_id": user_id,
+                "file_path": file_url,
+                "file_type": file.content_type,
+                "file_size": len(content),
+                "mode": mode,
+                "folder_path": f"{mode}/{uuid.uuid4()}",
+                "metadata": {}
+            }
+
+            # Insert into documents table
+            result = await self.supabase.table('documents') \
+                .insert(document_data) \
+                .execute()
+
+            if not result.data:
+                raise HTTPException(status_code=500, detail="Database insert failed")
+
+            return Document(**result.data[0])
+
         except Exception as e:
+            logger.error(f"File save error: {str(e)}")
             raise HTTPException(status_code=500, detail=str(e))
 
-    async def create_document(
-        self,
-        user_id: str,
-        file_name: str,
-        content: bytes,
-        mode: str,  # 'research' or 'case'
-        case_id: Optional[str] = None,
-        session_id: Optional[str] = None
-    ) -> Document:
+    async def list_documents(self, user_id: str) -> List[Document]:
+        """List all documents for a user"""
         try:
-            # Get user UUID from email
-            user_result = await self.supabase.from_('users').select('id').eq('email', user_id).single().execute()
-            if not user_result.data:
-                raise HTTPException(status_code=404, detail="User not found")
-            
-            user_uuid = user_result.data['id']
-            bucket_id = f"user_{user_uuid}"
-            
-            # Construct folder path based on mode
-            if mode == 'research':
-                folder_path = f"research/{session_id}" if session_id else "research/general"
-            else:  # case mode
-                folder_path = f"cases/{case_id}" if case_id else "cases/general"
-            
-            # Storage path includes folder structure
-            storage_path = f"{folder_path}/{datetime.now().strftime('%Y%m%d_%H%M%S')}_{file_name}"
-            
-            # Upload to user's bucket
-            await self.supabase.storage.from_(bucket_id).upload(storage_path, content)
-            
-            # Create document record
-            document_data = {
-                "user_id": user_uuid,
-                "file_name": file_name,
-                "storage_path": storage_path,
-                "folder_path": folder_path,
-                "mode": mode,
-                "case_id": case_id,
-                "session_id": session_id,
-                "created_at": datetime.utcnow().isoformat()
-            }
-            
-            result = await self.supabase.table('documents').insert(document_data).execute()
-            return Document(**result.data[0])
+            result = await self.supabase.table('documents') \
+                .select('*') \
+                .eq('user_id', user_id) \
+                .execute()
+
+            return [Document(**doc) for doc in result.data]
         except Exception as e:
+            logger.error(f"List documents error: {str(e)}")
             raise HTTPException(status_code=500, detail=str(e)) 

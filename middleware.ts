@@ -52,9 +52,37 @@ export async function middleware(req: NextRequest) {
   const isAuthRoute = req.nextUrl.pathname.startsWith('/auth');
   const isApiRoute = req.nextUrl.pathname.startsWith('/api');
 
-  // Skip API routes except auth endpoints
-  if (isApiRoute && !req.nextUrl.pathname.startsWith('/api/v1/auth')) {
-    return res;
+  // Handle API routes differently
+  if (isApiRoute) {
+    // Allow auth endpoints
+    if (req.nextUrl.pathname.startsWith('/api/v1/auth')) {
+      return res;
+    }
+    
+    // For other API routes, verify token
+    const token = req.headers.get('authorization')?.split(' ')[1];
+    if (!token) {
+      return new NextResponse(JSON.stringify({ detail: 'No token provided' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    try {
+      const isValid = await verifyToken(token);
+      if (!isValid) {
+        return new NextResponse(JSON.stringify({ detail: 'Invalid token' }), {
+          status: 403,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+      return res;
+    } catch (error) {
+      return new NextResponse(JSON.stringify({ detail: 'Token verification failed' }), {
+        status: 403,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
   }
 
   // Get token from both cookie and localStorage
