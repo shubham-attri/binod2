@@ -5,7 +5,7 @@ import { Metadata } from "next";
 import { ErrorBoundary } from "react-error-boundary";
 import { ErrorFallback } from "@/components/error-fallback";
 import { Toaster } from 'sonner';
-import { ChatProvider } from "@/contexts/chat-context";
+import { ChatProvider } from "@/lib/chat-context";
 
 const inter = Inter({ subsets: ["latin"] });
 
