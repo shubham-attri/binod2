@@ -1,137 +1,88 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { File, Trash2, Download, Search } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { apiClient } from "@/lib/api-client";
-import type { Document } from "@/lib/types";
+import { useEffect, useState } from 'react';
+import { useAuth } from '@/lib/auth-context';
 
-interface DocumentListProps {
-  caseId?: string;
-  onDocumentSelect?: (document: Document) => void;
-  onDocumentDelete?: (document: Document) => void;
+interface Document {
+  id: string;
+  file_name: string;
+  folder_path: string;
+  mode: 'research' | 'case';
+  created_at: string;
 }
 
-export function DocumentList({
-  caseId,
-  onDocumentSelect,
-  onDocumentDelete
-}: DocumentListProps) {
+interface DocumentListProps {
+  mode: 'research' | 'case';
+  caseId?: string;
+  sessionId?: string;
+}
+
+export function DocumentList({ mode, caseId, sessionId }: DocumentListProps) {
+  const { user } = useAuth();
   const [documents, setDocuments] = useState<Document[]>([]);
-  const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
+  const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
 
   useEffect(() => {
-    loadDocuments();
-  }, [caseId]);
+    const loadDocuments = async () => {
+      try {
+        setLoading(true);
+        const token = localStorage.getItem('auth_token');
+        
+        if (!token || !user) {
+          console.log('No token or user found');
+          return;
+        }
 
-  const loadDocuments = async () => {
-    try {
-      setLoading(true);
-      const docs = await apiClient.listDocuments(caseId);
-      setDocuments(docs);
-    } catch (error) {
-      console.error("Failed to load documents:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
+        const params = new URLSearchParams();
+        if (caseId) params.append('case_id', caseId);
+        if (sessionId) params.append('session_id', sessionId);
 
-  const handleDelete = async (document: Document) => {
-    try {
-      await apiClient.deleteDocument(document.id);
-      setDocuments(prev => prev.filter(d => d.id !== document.id));
-      if (onDocumentDelete) {
-        onDocumentDelete(document);
+        const response = await fetch(
+          `${BACKEND_URL}/api/v1/documents/list?${params}`,
+          {
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const data = await response.json();
+        setDocuments(data);
+      } catch (error) {
+        console.error('Failed to load documents:', error);
+      } finally {
+        setLoading(false);
       }
-    } catch (error) {
-      console.error("Failed to delete document:", error);
-    }
-  };
+    };
 
-  const filteredDocuments = documents.filter(doc =>
-    doc.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+    loadDocuments();
+  }, [user, caseId, sessionId, mode]);
 
-  const formatFileSize = (bytes: number) => {
-    if (bytes === 0) return "0 B";
-    const k = 1024;
-    const sizes = ["B", "KB", "MB", "GB"];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
-  };
+  if (loading) {
+    return <div>Loading documents...</div>;
+  }
 
   return (
     <div className="space-y-4">
-      <div className="relative">
-        <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Search documents..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="pl-8"
-        />
-      </div>
-
-      <ScrollArea className="h-[400px] pr-4">
-        {loading ? (
-          <div className="flex items-center justify-center h-full">
-            <div className="text-sm text-muted-foreground">Loading documents...</div>
-          </div>
-        ) : filteredDocuments.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-center">
-            <File className="h-8 w-8 text-muted-foreground mb-2" />
-            <div className="text-sm text-muted-foreground">
-              {searchQuery ? "No documents found" : "No documents uploaded yet"}
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {filteredDocuments.map((doc) => (
-              <div
-                key={doc.id}
-                className="group flex items-center justify-between p-2 rounded-lg hover:bg-muted cursor-pointer"
-                onClick={() => onDocumentSelect?.(doc)}
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <File className="h-5 w-5 flex-shrink-0" />
-                  <div className="min-w-0">
-                    <div className="text-sm font-medium truncate">{doc.name}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {formatFileSize(doc.size)}
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      window.open(doc.metadata?.download_url, '_blank');
-                    }}
-                  >
-                    <Download className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDelete(doc);
-                    }}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </ScrollArea>
+      {documents.map((doc) => (
+        <div 
+          key={doc.id}
+          className="p-4 border rounded-lg hover:bg-gray-50"
+        >
+          <h3 className="font-medium">{doc.file_name}</h3>
+          <p className="text-sm text-gray-500">
+            Folder: {doc.folder_path}
+          </p>
+          <p className="text-xs text-gray-400">
+            Added: {new Date(doc.created_at).toLocaleDateString()}
+          </p>
+        </div>
+      ))}
     </div>
   );
 } 

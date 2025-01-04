@@ -48,3 +48,4 @@ next-env.d.ts
 backend/__pycache__/
 backend/**/*.pyc
 backend/venv/
+backend/venv312/
