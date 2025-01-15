@@ -1,12 +1,14 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { AIInputWithLoading } from "./ui/ai-input-with-loading";
+import { ChatInput } from "./ui/chat-input";
 import { ScrollArea } from "./ui/scroll-area";
-import { Copy, ThumbsUp, ThumbsDown, RotateCcw, PenLine, X } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { Copy, ThumbsUp, ThumbsDown, RotateCcw, X } from "lucide-react"; // Removed PenLine import
 import { Button } from "./ui/button";
 import { toast } from "sonner";
 import { sendChatMessage } from "@/lib/api";
+import { createConversation, addMessage, getConversation, deleteMessagesAfter } from "@/lib/supabase/db";
 
 interface Message {
   id: string;
@@ -19,85 +21,143 @@ interface Message {
 interface QuoteData {
   content: string;
   messageId: string;
-  type: 'edit' | 'quote';
+  type: 'quote';
 }
 
 export function ChatInterface() {
   const [messages, setMessages] = useState<Message[]>([]);
-  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [quoteData, setQuoteData] = useState<QuoteData | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [conversationId, setConversationId] = useState<string | null>(null);
 
-  // Handle initial query on mount
+  // Load or create conversation
   useEffect(() => {
-    const initialQuery = sessionStorage.getItem("initialQuery");
-    if (initialQuery) {
-      handleSubmit(initialQuery);
-      // Clear the initial query but keep chatStarted flag
-      sessionStorage.removeItem("initialQuery");
-    }
-  }, []);
+    let mounted = true;
 
-  const handleSubmit = async (value: string, editingId?: string) => {
-    if (isProcessing) return;
+    async function initConversation() {
+      const initialQuery = localStorage.getItem("initialQuery");
+      console.log("Starting conversation with query:", initialQuery);
+      
+      try {
+        // Always create new conversation if there's an initial query
+        if (initialQuery && mounted) {
+          const conversation = await createConversation(
+            `Chat about: ${initialQuery.slice(0, 30)}...`
+          );
+          
+          if (!mounted) return; // Check if still mounted
+          
+          setConversationId(conversation.id);
+          sessionStorage.setItem("currentConversationId", conversation.id);
+          
+          if (conversation.id) {
+            // Add user message first
+            const userMessage = await addMessage(conversation.id, "user", initialQuery);
+            
+            if (!mounted) return;
+            
+            setMessages(prev => [...prev, {
+              ...userMessage,
+              timestamp: new Date(userMessage.created_at)
+            }]);
+
+            // Get AI response
+            const response = await sendChatMessage(initialQuery);
+            
+            if (!mounted) return;
+            
+            // Add AI message
+            const aiMessage = await addMessage(
+              conversation.id,
+              "assistant",
+              response.content,
+              response.thinking_steps
+            );
+
+            setMessages(prev => [...prev, {
+              ...aiMessage,
+              timestamp: new Date(aiMessage.created_at)
+            }]);
+
+            // Clear initial query after processing
+            localStorage.removeItem("initialQuery");
+          }
+        } else if (mounted) {
+          // Load existing conversation or create new one
+          const savedId = sessionStorage.getItem("currentConversationId");
+          if (savedId) {
+            const conversation = await getConversation(savedId);
+            
+            if (!mounted) return;
+            
+            setConversationId(savedId);
+            setMessages(conversation.messages.map(msg => ({
+              ...msg,
+              timestamp: new Date(msg.created_at)
+            })));
+          } else {
+            const conversation = await createConversation("New Chat");
+            
+            if (!mounted) return;
+            
+            setConversationId(conversation.id);
+            sessionStorage.setItem("currentConversationId", conversation.id);
+          }
+        }
+      } catch (error) {
+        if (mounted) {
+          console.error('Failed to initialize conversation:', error);
+          toast.error("Failed to start conversation");
+        }
+      }
+    }
+
+    initConversation();
+
+    // Cleanup function
+    return () => {
+      mounted = false;
+    };
+  }, []); // Empty dependency array
+
+  const handleSubmit = async (value: string, file?: File) => {
+    if (!conversationId || isProcessing) return;
     setIsProcessing(true);
 
-    if (editingId) {
-      const editedMessageIndex = messages.findIndex(m => m.id === editingId);
-      if (editedMessageIndex !== -1) {
-        setMessages(prev => prev.slice(0, editedMessageIndex));
-      }
-    }
-
-    const userMessage: Message = {
-      id: crypto.randomUUID(),
-      content: value,
-      role: "user",
-      timestamp: new Date(),
-    };
-    
-    setMessages(prev => [...prev, userMessage]);
-    setEditingMessageId(null);
-    setQuoteData(null);
-
-    // Create AI message placeholder
-    const aiMessage: Message = {
-      id: crypto.randomUUID(),
-      content: "",
-      role: "assistant",
-      timestamp: new Date(),
-      thinking: []
-    };
-    
-    setMessages(prev => [...prev, aiMessage]);
-
     try {
-      const response = await sendChatMessage(value);
-      
-      // Show thinking steps
-      for (const step of response.thinking_steps) {
-        aiMessage.thinking?.push(step);
-        setMessages(prev => prev.map(msg => 
-          msg.id === aiMessage.id ? { ...msg, thinking: [...(aiMessage.thinking || [])] } : msg
-        ));
-        await new Promise(resolve => setTimeout(resolve, 500));
+      // Handle file upload if present
+      let messageContent = value;
+      if (file) {
+        // TODO: Implement file upload logic
+        messageContent = `${value} [File: ${file.name}]`;
       }
 
-      // Show final response
-      setMessages(prev => prev.map(msg => 
-        msg.id === aiMessage.id 
-          ? { 
-              ...msg, 
-              content: response.content,
-              thinking: undefined
-            }
-          : msg
-      ));
+      const userMessage = await addMessage(conversationId, "user", messageContent);
+      setMessages(prev => [...prev, {
+        ...userMessage,
+        timestamp: new Date(userMessage.created_at)
+      }]);
+
+      const response = await sendChatMessage(messageContent);
+      
+      const aiMessage = await addMessage(
+        conversationId, 
+        "assistant", 
+        response.content,
+        response.thinking_steps
+      );
+
+      setMessages(prev => [...prev, {
+        ...aiMessage,
+        timestamp: new Date(aiMessage.created_at)
+      }]);
+
     } catch (error) {
-      console.error('Failed to get response:', error);
-      // Handle error appropriately
+      console.error('Error:', error);
+      toast.error("Failed to send message");
     } finally {
       setIsProcessing(false);
+      setQuoteData(null);
     }
   };
 
@@ -106,23 +166,41 @@ export function ChatInterface() {
     toast.success("Copied to clipboard");
   };
 
-  const handleRetry = (messageId: string) => {
-    const messageIndex = messages.findIndex(m => m.id === messageId);
-    if (messageIndex !== -1 && messageIndex > 0) {
-      const userMessage = messages[messageIndex - 1];
-      setMessages(prev => prev.slice(0, messageIndex));
-      handleSubmit(userMessage.content);
-    }
-  };
+  const handleRetry = async (messageId: string) => {
+    if (!conversationId || isProcessing) return;
+    setIsProcessing(true);
 
-  const handleEdit = (messageId: string) => {
-    const message = messages.find(m => m.id === messageId);
-    if (message) {
-      setQuoteData({
-        content: message.content,
-        messageId: message.id,
-        type: 'edit'
-      });
+    try {
+      const messageIndex = messages.findIndex(m => m.id === messageId);
+      if (messageIndex !== -1 && messageIndex > 0) {
+        const userMessage = messages[messageIndex - 1];
+        
+        // Remove messages from this point onwards in UI and DB
+        setMessages(prev => prev.slice(0, messageIndex));
+        await deleteMessagesAfter(conversationId, messages[messageIndex - 1].id);
+
+        // Get new AI response
+        const response = await sendChatMessage(userMessage.content);
+        
+        // Add new AI message to DB
+        const aiMessage = await addMessage(
+          conversationId,
+          "assistant",
+          response.content,
+          response.thinking_steps
+        );
+
+        // Update UI with new AI message
+        setMessages(prev => [...prev, {
+          ...aiMessage,
+          timestamp: new Date(aiMessage.created_at)
+        }]);
+      }
+    } catch (error) {
+      console.error('Error retrying:', error);
+      toast.error("Failed to retry");
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -205,16 +283,7 @@ export function ChatInterface() {
                               <ThumbsDown className="h-4 w-4" />
                             </Button>
                           </>
-                        ) : (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6"
-                            onClick={() => handleEdit(message.id)}
-                          >
-                            <PenLine className="h-4 w-4" />
-                          </Button>
-                        )}
+                        ) : null} {/* Removed PenLine button */}
                       </div>
                     </>
                   )}
@@ -231,9 +300,7 @@ export function ChatInterface() {
             <div className="relative mb-2">
               <div className="absolute left-0 top-0 bottom-0 w-[2px] bg-border" />
               <div className="pl-3">
-                <p className="text-xs text-muted-foreground mb-1">
-                  {quoteData.type === 'edit' ? 'Editing message:' : 'Quote:'}
-                </p>
+                <p className="text-xs text-muted-foreground mb-1">Quote:</p>
                 <div className="flex items-start gap-2">
                   <p className="text-sm flex-1 text-foreground/80">
                     {quoteData.content}
@@ -250,13 +317,10 @@ export function ChatInterface() {
               </div>
             </div>
           )}
-          <AIInputWithLoading
-            onSubmit={(value) => handleSubmit(value, quoteData?.type === 'edit' ? quoteData.messageId : undefined)}
+          <ChatInput
+            onSubmit={handleSubmit}
             placeholder="Message Binod..."
-            className="font-sans [&>textarea]:rounded-lg"
-            minHeight={64}
-            maxHeight={200}
-            initialValue={quoteData?.type === 'edit' ? quoteData.content : ''}
+            className="font-sans"
             disabled={isProcessing}
           />
           <div className="text-center mt-2">

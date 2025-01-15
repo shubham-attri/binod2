@@ -1,92 +1,127 @@
 "use client";
 
-import { CornerRightUp } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useRef } from "react";
+import { Loader2, CornerRightUp, Paperclip, X, FileUp } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { useAutoResizeTextarea } from "../hooks/use-auto-resize-textarea";
+
+interface FileDisplayProps {
+  fileName: string;
+  onClear: () => void;
+}
+
+function FileDisplay({ fileName, onClear }: FileDisplayProps) {
+  return (
+    <div className="flex items-center gap-2 bg-black/5 dark:bg-white/5 w-fit px-3 py-1 rounded-lg group border dark:border-white/10">
+      <FileUp className="w-4 h-4 dark:text-white" />
+      <span className="text-sm dark:text-white">{fileName}</span>
+      <button
+        type="button"
+        onClick={onClear}
+        className="ml-1 p-0.5 rounded-full hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
+      >
+        <X className="w-3 h-3 dark:text-white" />
+      </button>
+    </div>
+  );
+}
 
 interface AIInputWithLoadingProps {
-  id?: string;
+  onSubmit?: (value: string, file?: File) => void;
   placeholder?: string;
+  disabled?: boolean;
+  className?: string;
   minHeight?: number;
   maxHeight?: number;
-  loadingDuration?: number;
-  thinkingDuration?: number;
-  onSubmit?: (value: string) => void | Promise<void>;
-  className?: string;
-  autoAnimate?: boolean;
+  initialValue?: string;
+  accept?: string;
+  maxFileSize?: number;
 }
 
 export function AIInputWithLoading({
-  id = "ai-input-with-loading",
-  placeholder = "Ask me anything!",
+  onSubmit,
+  placeholder = "Message...",
+  disabled,
+  className,
   minHeight = 56,
   maxHeight = 200,
-  loadingDuration = 3000,
-  thinkingDuration = 1000,
-  onSubmit,
-  className,
-  autoAnimate = false
+  initialValue = "",
+  accept = "application/pdf,.doc,.docx,text/*",
+  maxFileSize = 5
 }: AIInputWithLoadingProps) {
-  const [inputValue, setInputValue] = useState("");
-  const [submitted, setSubmitted] = useState(autoAnimate);
-  const [isAnimating, setIsAnimating] = useState(autoAnimate);
-  
-  const { textareaRef, adjustHeight } = useAutoResizeTextarea({
-    minHeight,
-    maxHeight,
-  });
+  const [value, setValue] = useState(initialValue);
+  const [height, setHeight] = useState(minHeight);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [fileName, setFileName] = useState<string>("");
 
-  useEffect(() => {
-    let timeoutId: NodeJS.Timeout;
-
-    const runAnimation = () => {
-      if (!isAnimating) return;
-      setSubmitted(true);
-      timeoutId = setTimeout(() => {
-        setSubmitted(false);
-        timeoutId = setTimeout(runAnimation, thinkingDuration);
-      }, loadingDuration);
-    };
-
-    if (isAnimating) {
-      runAnimation();
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > maxFileSize * 1024 * 1024) {
+        alert(`File size must be less than ${maxFileSize}MB`);
+        return;
+      }
+      setSelectedFile(file);
+      setFileName(file.name);
     }
+  };
 
-    return () => clearTimeout(timeoutId);
-  }, [isAnimating, loadingDuration, thinkingDuration]);
+  const clearFile = () => {
+    setSelectedFile(null);
+    setFileName("");
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
 
-  const handleSubmit = async () => {
-    if (!inputValue.trim() || submitted) return;
-    
-    setSubmitted(true);
-    await onSubmit?.(inputValue);
-    setInputValue("");
-    adjustHeight(true);
-    
-    setTimeout(() => {
-      setSubmitted(false);
-    }, loadingDuration);
+  const adjustHeight = () => {
+    const textarea = textareaRef.current;
+    if (textarea) {
+      textarea.style.height = 'auto';
+      const newHeight = Math.min(Math.max(textarea.scrollHeight, minHeight), maxHeight);
+      setHeight(newHeight);
+      textarea.style.height = `${newHeight}px`;
+    }
+  };
+
+  const handleSubmit = () => {
+    if (value.trim() || selectedFile) {
+      onSubmit?.(value, selectedFile || undefined);
+      setValue("");
+      clearFile();
+      if (textareaRef.current) {
+        textareaRef.current.style.height = `${minHeight}px`;
+        setHeight(minHeight);
+      }
+    }
   };
 
   return (
-    <div className={cn("w-full", className)}>
-      <div className="relative w-full">
+    <div className={className}>
+      {fileName && <FileDisplay fileName={fileName} onClear={clearFile} />}
+      <div className="relative">
+        <div
+          className="absolute left-2 top-1/2 -translate-y-1/2 flex items-center justify-center h-7 w-7 rounded-lg bg-black/5 dark:bg-white/5 hover:cursor-pointer"
+          onClick={() => fileInputRef.current?.click()}
+        >
+          <Paperclip className="h-4 w-4 transform scale-x-[-1] rotate-45" />
+        </div>
+
+        <input
+          type="file"
+          className="hidden"
+          ref={fileInputRef}
+          onChange={handleFileSelect}
+          accept={accept}
+        />
+
         <Textarea
-          id={id}
-          placeholder={placeholder}
-          className={cn(
-            "w-full bg-background rounded-lg pl-4 pr-10 py-3",
-            "placeholder:text-muted-foreground",
-            "border-border focus-visible:ring-1",
-            "text-foreground resize-none text-wrap leading-relaxed",
-            `min-h-[${minHeight}px]`
-          )}
           ref={textareaRef}
-          value={inputValue}
+          value={value}
           onChange={(e) => {
-            setInputValue(e.target.value);
+            setValue(e.target.value);
             adjustHeight();
           }}
           onKeyDown={(e) => {
@@ -95,29 +130,29 @@ export function AIInputWithLoading({
               handleSubmit();
             }
           }}
-          disabled={submitted}
+          placeholder={placeholder}
+          disabled={disabled}
+          className={cn(
+            "resize-none overflow-hidden pr-12 pl-10",
+            disabled && "opacity-50 cursor-not-allowed"
+          )}
+          style={{ height }}
         />
+
         <button
           onClick={handleSubmit}
+          disabled={disabled}
           className={cn(
-            "absolute right-2 top-1/2 -translate-y-1/2 rounded-lg p-1",
-            submitted ? "bg-none" : "hover:bg-muted/50"
+            "absolute right-2 top-1/2 -translate-y-1/2 h-7 w-7 rounded-lg bg-black/5 dark:bg-white/5 flex items-center justify-center",
+            "hover:bg-black/10 dark:hover:bg-white/10 transition-colors",
+            disabled && "opacity-50 cursor-not-allowed",
+            (!value.trim() && !selectedFile) && "opacity-50 cursor-not-allowed"
           )}
-          type="button"
-          disabled={submitted}
         >
-          {submitted ? (
-            <div
-              className="w-4 h-4 bg-foreground rounded-sm animate-spin"
-              style={{ animationDuration: "3s" }}
-            />
+          {disabled ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
           ) : (
-            <CornerRightUp
-              className={cn(
-                "w-4 h-4 transition-opacity",
-                inputValue ? "opacity-100" : "opacity-30"
-              )}
-            />
+            <CornerRightUp className="h-4 w-4" />
           )}
         </button>
       </div>

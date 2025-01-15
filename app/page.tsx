@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { AIInputWithLoading } from "@/components/ui/ai-input-with-loading";
+import { ChatInput } from "@/components/ui/chat-input";
 import { RetroGrid } from "@/components/ui/retro-grid";
 
 function getGreeting() {
@@ -15,9 +15,10 @@ function getGreeting() {
 export default function Home() {
   const router = useRouter();
 
-  const handleSubmit = async (value: string) => {
-    // Store initial query and navigate to chat
-    sessionStorage.setItem("initialQuery", value);
+  const handleSubmit = async (value: string, file?: File) => {
+    // Store initial query in localStorage
+    localStorage.setItem("initialQuery", value);
+    console.log("initialQuery", localStorage.getItem("initialQuery"));
     router.push("/chat");
   };
 
@@ -35,10 +36,10 @@ export default function Home() {
           </p>
         </div>
 
-        <AIInputWithLoading
+        <ChatInput
           onSubmit={handleSubmit}
           placeholder="Send a message to start a new chat..."
-          className="font-sans [&>textarea]:rounded-lg [&>textarea]:text-lg [&>textarea]:p-4"
+          className="font-sans"
           minHeight={100}
           maxHeight={300}
         />
