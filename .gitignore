@@ -40,3 +40,7 @@ next-env.d.ts
 
 # rules
 rules.md
+
+# backend
+backend/venv
+backend/app/__pycache__

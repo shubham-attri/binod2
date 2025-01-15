@@ -6,6 +6,7 @@ import { ScrollArea } from "./ui/scroll-area";
 import { Copy, ThumbsUp, ThumbsDown, RotateCcw, PenLine, X } from "lucide-react";
 import { Button } from "./ui/button";
 import { toast } from "sonner";
+import { sendChatMessage } from "@/lib/api";
 
 interface Message {
   id: string;
@@ -59,44 +60,45 @@ export function ChatInterface() {
     setEditingMessageId(null);
     setQuoteData(null);
 
-    // Simulate AI thinking process
+    // Create AI message placeholder
     const aiMessage: Message = {
       id: crypto.randomUUID(),
       content: "",
       role: "assistant",
       timestamp: new Date(),
-      thinking: [
-        "Analyzing query context...",
-        "Retrieving relevant information...",
-        "Formulating response...",
-      ]
+      thinking: []
     };
     
     setMessages(prev => [...prev, aiMessage]);
 
-    // Simulate thinking steps
-    for (let i = 0; i < aiMessage.thinking!.length; i++) {
-      await new Promise(resolve => setTimeout(resolve, 100));
-      setMessages(prev => prev.map(msg => 
-        msg.id === aiMessage.id 
-          ? { ...msg, thinking: msg.thinking?.slice(0, i + 1) }
-          : msg
-      ));
-    }
+    try {
+      const response = await sendChatMessage(value);
+      
+      // Show thinking steps
+      for (const step of response.thinking_steps) {
+        aiMessage.thinking?.push(step);
+        setMessages(prev => prev.map(msg => 
+          msg.id === aiMessage.id ? { ...msg, thinking: [...(aiMessage.thinking || [])] } : msg
+        ));
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
 
-    // Simulate final response
-    setTimeout(() => {
+      // Show final response
       setMessages(prev => prev.map(msg => 
         msg.id === aiMessage.id 
           ? { 
               ...msg, 
-              content: `This is a simulated response to: "${value}"`,
+              content: response.content,
               thinking: undefined
             }
           : msg
       ));
+    } catch (error) {
+      console.error('Failed to get response:', error);
+      // Handle error appropriately
+    } finally {
       setIsProcessing(false);
-    }, 1000);
+    }
   };
 
   const handleCopy = (content: string) => {
