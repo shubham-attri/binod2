@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react";
 import { AIInputWithLoading } from "./ui/ai-input-with-loading";
 import { ScrollArea } from "./ui/scroll-area";
-import { cn } from "@/lib/utils";
 import { Copy, ThumbsUp, ThumbsDown, RotateCcw, PenLine, X } from "lucide-react";
 import { Button } from "./ui/button";
 import { toast } from "sonner";
@@ -33,7 +32,8 @@ export function ChatInterface() {
     const initialQuery = sessionStorage.getItem("initialQuery");
     if (initialQuery) {
       handleSubmit(initialQuery);
-      sessionStorage.removeItem("initialQuery"); // Clear after use
+      // Clear the initial query but keep chatStarted flag
+      sessionStorage.removeItem("initialQuery");
     }
   }, []);
 
@@ -76,7 +76,7 @@ export function ChatInterface() {
 
     // Simulate thinking steps
     for (let i = 0; i < aiMessage.thinking!.length; i++) {
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise(resolve => setTimeout(resolve, 100));
       setMessages(prev => prev.map(msg => 
         msg.id === aiMessage.id 
           ? { ...msg, thinking: msg.thinking?.slice(0, i + 1) }
