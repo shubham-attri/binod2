@@ -6,16 +6,20 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     
+    console.log('Connecting to backend:', BACKEND_URL);
+    
     const response = await fetch(`${BACKEND_URL}/chat`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(body),
+      // Add timeout and connection settings
+      signal: AbortSignal.timeout(15000), // 15 second timeout
     });
 
     if (!response.ok) {
-      throw new Error('Backend request failed');
+      throw new Error(`Backend request failed: ${response.status}`);
     }
 
     const readable = response.body;
@@ -33,8 +37,12 @@ export async function POST(request: Request) {
 
   } catch (error) {
     console.error('Chat API error:', error);
+    // More descriptive error message
     return NextResponse.json(
-      { error: 'Failed to process request' },
+      { 
+        error: 'Failed to process request',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      },
       { status: 500 }
     );
   }
