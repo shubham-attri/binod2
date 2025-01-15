@@ -6,12 +6,14 @@ import { ScrollArea } from "./ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { Copy, ThumbsUp, ThumbsDown, RotateCcw, PenLine, X } from "lucide-react";
 import { Button } from "./ui/button";
+import { toast } from "sonner";
 
 interface Message {
   id: string;
   content: string;
   role: "user" | "assistant";
   timestamp: Date;
+  thinking?: string[];
 }
 
 interface QuoteData {
@@ -24,8 +26,12 @@ export function ChatInterface() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [quoteData, setQuoteData] = useState<QuoteData | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   const handleSubmit = async (value: string, editingId?: string) => {
+    if (isProcessing) return;
+    setIsProcessing(true);
+
     if (editingId) {
       const editedMessageIndex = messages.findIndex(m => m.id === editingId);
       if (editedMessageIndex !== -1) {
@@ -44,19 +50,49 @@ export function ChatInterface() {
     setEditingMessageId(null);
     setQuoteData(null);
 
+    // Simulate AI thinking process
+    const aiMessage: Message = {
+      id: crypto.randomUUID(),
+      content: "",
+      role: "assistant",
+      timestamp: new Date(),
+      thinking: [
+        "Analyzing query context...",
+        "Retrieving relevant information...",
+        "Formulating response...",
+      ]
+    };
+    
+    setMessages(prev => [...prev, aiMessage]);
+
+    // Simulate thinking steps
+    for (let i = 0; i < aiMessage.thinking!.length; i++) {
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      setMessages(prev => prev.map(msg => 
+        msg.id === aiMessage.id 
+          ? { ...msg, thinking: msg.thinking?.slice(0, i + 1) }
+          : msg
+      ));
+    }
+
+    // Simulate final response
     setTimeout(() => {
-      const aiMessage: Message = {
-        id: crypto.randomUUID(),
-        content: `This is a simulated response to: "${value}"`,
-        role: "assistant",
-        timestamp: new Date(),
-      };
-      setMessages(prev => [...prev, aiMessage]);
-    }, 2000);
+      setMessages(prev => prev.map(msg => 
+        msg.id === aiMessage.id 
+          ? { 
+              ...msg, 
+              content: `This is a simulated response to: "${value}"`,
+              thinking: undefined
+            }
+          : msg
+      ));
+      setIsProcessing(false);
+    }, 1000);
   };
 
   const handleCopy = (content: string) => {
     navigator.clipboard.writeText(content);
+    toast.success("Copied to clipboard");
   };
 
   const handleRetry = (messageId: string) => {
@@ -100,14 +136,11 @@ export function ChatInterface() {
                 className="flex gap-4 py-2 group relative"
                 onMouseUp={() => message.role === "assistant" && handleQuoteSelect(message.id)}
               >
-                {/* Vertical connection line */}
+                {/* Connection line */}
                 {message.role === "assistant" && (
                   <div 
                     className="absolute left-4 top-0 w-[2px] bg-border" 
-                    style={{ 
-                      height: '28px',
-                      top: '-12px'
-                    }} 
+                    style={{ height: '28px', top: '-12px' }} 
                   />
                 )}
                 <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 relative z-10">
@@ -120,44 +153,60 @@ export function ChatInterface() {
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm text-foreground">{message.content}</p>
-                  <div className="flex justify-end gap-1 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-6 w-6"
-                      onClick={() => handleCopy(message.content)}
-                    >
-                      <Copy className="h-4 w-4" />
-                    </Button>
-                    {message.role === "assistant" ? (
-                      <>
+                  {message.thinking ? (
+                    <div className="space-y-2">
+                      {message.thinking.map((step, i) => (
+                        <div 
+                          key={i}
+                          className="flex items-center gap-2 text-sm text-muted-foreground"
+                        >
+                          <div className="w-1.5 h-1.5 rounded-full bg-foreground/30 animate-pulse" />
+                          <span>{step}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <>
+                      <p className="text-sm text-foreground">{message.content}</p>
+                      <div className="flex justify-end gap-1 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
                         <Button
                           variant="ghost"
                           size="icon"
                           className="h-6 w-6"
-                          onClick={() => handleRetry(message.id)}
+                          onClick={() => handleCopy(message.content)}
                         >
-                          <RotateCcw className="h-4 w-4" />
+                          <Copy className="h-4 w-4" />
                         </Button>
-                        <Button variant="ghost" size="icon" className="h-6 w-6">
-                          <ThumbsUp className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon" className="h-6 w-6">
-                          <ThumbsDown className="h-4 w-4" />
-                        </Button>
-                      </>
-                    ) : (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-6 w-6"
-                        onClick={() => handleEdit(message.id)}
-                      >
-                        <PenLine className="h-4 w-4" />
-                      </Button>
-                    )}
-                  </div>
+                        {message.role === "assistant" ? (
+                          <>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6"
+                              onClick={() => handleRetry(message.id)}
+                            >
+                              <RotateCcw className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="icon" className="h-6 w-6">
+                              <ThumbsUp className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="icon" className="h-6 w-6">
+                              <ThumbsDown className="h-4 w-4" />
+                            </Button>
+                          </>
+                        ) : (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6"
+                            onClick={() => handleEdit(message.id)}
+                          >
+                            <PenLine className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
@@ -197,6 +246,7 @@ export function ChatInterface() {
             minHeight={64}
             maxHeight={200}
             initialValue={quoteData?.type === 'edit' ? quoteData.content : ''}
+            disabled={isProcessing}
           />
           <div className="text-center mt-2">
             <p className="text-xs text-muted-foreground">
