@@ -103,4 +103,14 @@ export async function uploadFile(file: File) {
     name: file.name,
     type: file.type
   };
+}
+
+export async function getConversations() {
+  const { data, error } = await supabase
+    .from('conversations')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+  return data;
 } 
