@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { AIInputWithLoading } from "./ui/ai-input-with-loading";
 import { ScrollArea } from "./ui/scroll-area";
 import { cn } from "@/lib/utils";
@@ -27,6 +27,15 @@ export function ChatInterface() {
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [quoteData, setQuoteData] = useState<QuoteData | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+
+  // Handle initial query on mount
+  useEffect(() => {
+    const initialQuery = sessionStorage.getItem("initialQuery");
+    if (initialQuery) {
+      handleSubmit(initialQuery);
+      sessionStorage.removeItem("initialQuery"); // Clear after use
+    }
+  }, []);
 
   const handleSubmit = async (value: string, editingId?: string) => {
     if (isProcessing) return;
