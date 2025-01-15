@@ -5,6 +5,9 @@ class ChatRequest(BaseModel):
     message: str
     conversation_id: Optional[str] = None
 
+class ChatMessage(BaseModel):
+    content: str
+
 class ChatResponse(BaseModel):
     content: str
-    thinking_steps: Optional[List[str]] = None 
+    thinking_steps: list[str] 

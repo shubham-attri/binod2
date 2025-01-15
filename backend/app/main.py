@@ -1,11 +1,13 @@
-from fastapi import FastAPI # type: ignore
-from fastapi.middleware.cors import CORSMiddleware # type: ignore
-from .models import ChatRequest, ChatResponse
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
+import json
+from .models import ChatMessage
 import asyncio
 
 app = FastAPI()
 
-# Configure CORS for local development
+# Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000"],
@@ -14,19 +16,39 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.post("/api/chat")
-async def chat(request: ChatRequest) -> ChatResponse:
-    # Simulate thinking steps and response
-    thinking_steps = [
-        "Analyzing query context...",
-        "Retrieving relevant information...",
-        "Formulating response..."
+async def generate_thinking_steps():
+    steps = [
+        "Analyzing the query...",
+        "Processing information...",
+        "Formulating response...",
     ]
+    for step in steps:
+        yield json.dumps({"type": "thinking_step", "content": step}) + "\n"
+        await asyncio.sleep(0.5)  # Simulate processing time
+
+async def generate_response(message: str):
+    # Generate thinking steps first
+    async for step in generate_thinking_steps():
+        yield step
     
-    # Simulate processing time
-    await asyncio.sleep(2)
+    # Then send the final response
+    response = f"This is a simulated response to: '{message}'"
+    yield json.dumps({
+        "type": "response",
+        "content": response,
+        "thinking_steps": [
+            "Analyzed the query",
+            "Processed information",
+            "Formulated response"
+        ]
+    }) + "\n"
+
+@app.post("/chat")
+async def chat(message: ChatMessage):
+    if not message.content.strip():
+        raise HTTPException(status_code=400, detail="Message cannot be empty")
     
-    return ChatResponse(
-        content=f"This is a simulated response to: '{request.message}'",
-        thinking_steps=thinking_steps
+    return StreamingResponse(
+        generate_response(message.content),
+        media_type="text/event-stream"
     ) 

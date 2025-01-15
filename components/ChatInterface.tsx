@@ -128,18 +128,30 @@ export function ChatInterface() {
       // Handle file upload if present
       let messageContent = value;
       if (file) {
-        // TODO: Implement file upload logic
         messageContent = `${value} [File: ${file.name}]`;
       }
 
+      // Add user message
       const userMessage = await addMessage(conversationId, "user", messageContent);
       setMessages(prev => [...prev, {
         ...userMessage,
         timestamp: new Date(userMessage.created_at)
       }]);
 
+      // Create placeholder for AI response with thinking steps
+      const aiPlaceholder: Message = {
+        id: crypto.randomUUID(),
+        content: "",
+        role: "assistant",
+        timestamp: new Date(),
+        thinking: []
+      };
+      setMessages(prev => [...prev, aiPlaceholder]);
+
+      // Get AI response with streaming thinking steps
       const response = await sendChatMessage(messageContent);
       
+      // Add final AI message
       const aiMessage = await addMessage(
         conversationId, 
         "assistant", 
@@ -147,10 +159,13 @@ export function ChatInterface() {
         response.thinking_steps
       );
 
-      setMessages(prev => [...prev, {
-        ...aiMessage,
-        timestamp: new Date(aiMessage.created_at)
-      }]);
+      // Update messages with final response
+      setMessages(prev => prev.map(msg => 
+        msg.id === aiPlaceholder.id ? {
+          ...aiMessage,
+          timestamp: new Date(aiMessage.created_at)
+        } : msg
+      ));
 
     } catch (error) {
       console.error('Error:', error);
