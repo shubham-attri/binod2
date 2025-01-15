@@ -1,53 +1,44 @@
 "use client";
 
-import { History, Plus } from "lucide-react";
-import { usePathname, useRouter } from "next/navigation";
+import { Plus, History } from "lucide-react";
+import { usePathname } from "next/navigation";
 import {
   Sidebar,
-  SidebarContent,
-  SidebarGroup,
-  SidebarGroupContent,
-  SidebarGroupLabel,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
+  SidebarBody,
+  SidebarLink
 } from "@/components/ui/sidebar";
 
+const links = [
+  {
+    label: "New chat",
+    href: "/",
+    icon: <Plus className="h-5 w-5 shrink-0" />
+  },
+  {
+    label: "History",
+    href: "/history",
+    icon: <History className="h-5 w-5 shrink-0" />
+  }
+];
+
 export function AppSidebar() {
-  const router = useRouter();
   const pathname = usePathname();
 
-  // Don't show sidebar on home page
   if (pathname === "/") return null;
 
   return (
     <Sidebar>
-      <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton 
-                  onClick={() => router.push("/")}
-                  className="w-full"
-                >
-                  <Plus className="h-4 w-4" />
-                  <span>New Chat</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton 
-                  onClick={() => router.push("/history")}
-                  className="w-full"
-                >
-                  <History className="h-4 w-4" />
-                  <span>History</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-      </SidebarContent>
+      <SidebarBody className="bg-sidebar">
+        <div className="flex flex-col gap-2 p-2 font-sans">
+          {links.map((link) => (
+            <SidebarLink
+              key={link.href}
+              link={link}
+              className="hover:bg-sidebar-accent rounded-lg p-3 text-sm font-medium"
+            />
+          ))}
+        </div>
+      </SidebarBody>
     </Sidebar>
   );
 } 

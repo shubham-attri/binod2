@@ -9,6 +9,7 @@ import { Button } from "./ui/button";
 import { toast } from "sonner";
 import { sendChatMessage } from "@/lib/api";
 import { createConversation, addMessage, getConversation, deleteMessagesAfter } from "@/lib/supabase/db";
+import { ChatHeader } from "./chat-header";
 
 interface Message {
   id: string;
@@ -232,6 +233,12 @@ export function ChatInterface() {
 
   return (
     <div className="flex flex-col h-screen bg-background font-sans">
+      {conversationId && (
+        <ChatHeader 
+          conversationId={conversationId} 
+          initialTitle={messages[0]?.content.slice(0, 50) || "New Chat"} 
+        />
+      )}
       <ScrollArea className="flex-1 px-4 pb-4">
         <div className="max-w-2xl mx-auto">
           {messages.map((message, index) => (

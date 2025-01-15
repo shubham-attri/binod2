@@ -43,26 +43,17 @@ export async function addMessage(
 }
 
 export async function getConversation(id: string) {
-  const { data: conversation, error: conversationError } = await supabase
+  const { data, error } = await supabase
     .from('conversations')
-    .select()
+    .select(`
+      *,
+      messages (*)
+    `)
     .eq('id', id)
-    .single()
+    .single();
 
-  if (conversationError) throw conversationError
-
-  const { data: messages, error: messagesError } = await supabase
-    .from('messages')
-    .select()
-    .eq('conversation_id', id)
-    .order('created_at', { ascending: true })
-
-  if (messagesError) throw messagesError
-
-  return {
-    ...conversation,
-    messages
-  }
+  if (error) throw error;
+  return data;
 }
 
 export async function deleteMessagesAfter(conversationId: string, messageId: string) {
@@ -113,4 +104,13 @@ export async function getConversations() {
 
   if (error) throw error;
   return data;
+}
+
+export async function updateConversationTitle(id: string, title: string) {
+  const { error } = await supabase
+    .from('conversations')
+    .update({ title })
+    .eq('id', id);
+
+  if (error) throw error;
 } 

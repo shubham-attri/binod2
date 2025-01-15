@@ -28,14 +28,14 @@ export default function HistoryPage() {
   }, []);
 
   return (
-    <div className="container max-w-4xl mx-auto p-4">
-      <h1 className="text-2xl font-semibold mb-6">Chat History</h1>
-      <div className="space-y-4">
+    <div className="container max-w-2xl mx-auto p-4">
+      <h1 className="text-2xl font-semibold mb-4">Chat History</h1>
+      <div className="space-y-2">
         {conversations.map((conversation) => (
           <button
             key={conversation.id}
             onClick={() => router.push(`/chat?id=${conversation.id}`)}
-            className="w-full p-4 text-left rounded-lg border bg-card hover:bg-accent transition-colors"
+            className="w-full p-4 text-left rounded-lg border border-border hover:bg-muted/50 transition-colors"
           >
             <h3 className="font-medium">{conversation.title}</h3>
             <p className="text-sm text-muted-foreground">
