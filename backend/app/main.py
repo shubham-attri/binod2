@@ -4,13 +4,14 @@ from fastapi.responses import StreamingResponse
 import json
 from .models import ChatMessage
 import asyncio
+import os 
 
 app = FastAPI()
 
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=[os.getenv("DEV_SERVER_URL", "http://localhost:3000")],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
