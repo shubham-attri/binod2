@@ -1,10 +1,12 @@
 import { NextResponse } from 'next/server';
 
+const BACKEND_URL = process.env.DEV_SERVER_URL || 'http://localhost:8000';
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
     
-    const response = await fetch('http://localhost:8000/chat', {
+    const response = await fetch(`${BACKEND_URL}/chat`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -16,13 +18,11 @@ export async function POST(request: Request) {
       throw new Error('Backend request failed');
     }
 
-    // Get the readable stream from the response
     const readable = response.body;
     if (!readable) {
       throw new Error('No response body');
     }
 
-    // Return a streaming response
     return new NextResponse(readable, {
       headers: {
         'Content-Type': 'text/event-stream',

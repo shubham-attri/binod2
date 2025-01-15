@@ -1,0 +1,16 @@
+version: '3'
+
+services:
+  backend:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - DEV_SERVER_URL=${DEV_SERVER_URL}
+    restart: unless-stopped
+    networks:
+      - binod-network
+
+networks:
+  binod-network:
+    driver: bridge 
