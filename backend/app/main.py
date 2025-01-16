@@ -5,6 +5,10 @@ import json
 from .models import ChatMessage
 import asyncio
 import os 
+import logging
+
+# Only For Debugging
+logging.basicConfig(level=logging.INFO)
 
 app = FastAPI()
 
@@ -46,6 +50,11 @@ async def generate_response(message: str):
 
 @app.post("/chat")
 async def chat(message: ChatMessage):
+    
+    logging.info("--------------------------------")
+    logging.info("Received message:")
+    logging.info(message.content)
+    logging.info("--------------------------------")
 
     if not message.content.strip():
         raise HTTPException(status_code=400, detail="Message cannot be empty")
