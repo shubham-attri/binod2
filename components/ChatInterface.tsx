@@ -177,7 +177,7 @@ export function ChatInterface() {
         const response = await sendChatMessage(
           content, 
           fileUrl,
-          quoteData?.content // Pass quote if exists
+          quoteData?.content
         );
         
         // Update thinking steps in real time
@@ -189,7 +189,7 @@ export function ChatInterface() {
           )
         );
 
-        // Add final AI message
+        // Add the final message while keeping the thinking steps message
         const aiMessage = await addMessage(
           conversationId,
           "assistant",
@@ -197,14 +197,11 @@ export function ChatInterface() {
           response.thinking_steps
         );
 
-        // Replace temp message with final
-        setMessages(prev => 
-          prev.map(m => 
-            m.id === tempMessage.id 
-              ? { ...aiMessage, timestamp: new Date(aiMessage.created_at) }
-              : m
-          )
-        );
+        // Add the final message while keeping the thinking steps message
+        setMessages(prev => [...prev, {
+          ...aiMessage,
+          timestamp: new Date(aiMessage.created_at)
+        }]);
       }
     } catch (error) {
       console.error("Error in chat:", error);
