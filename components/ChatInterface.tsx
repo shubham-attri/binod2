@@ -11,6 +11,7 @@ import { createConversation, addMessage, getConversation, deleteMessagesAfter, g
 import { ChatHeader } from "./chat-header";
 import { useFileUpload } from '@/hooks/use-file-upload';
 import { Document } from "@/lib/supabase/types";
+import { TextShimmer } from "./ui/text-shimmer";
 
 interface Message {
   id: string;
@@ -128,11 +129,9 @@ export function ChatInterface() {
   }, [conversationId]);
 
   const handleSubmit = async (content: string, file?: File) => {
-    if (!content.trim() && !file) {
-      return;
-    }
-
+    if (!content.trim() && !file) return;
     if (!conversationId) return;
+    
     setIsProcessing(true);
 
     try {
@@ -164,11 +163,33 @@ export function ChatInterface() {
         timestamp: new Date(userMessage.created_at)
       }]);
 
-      // Get AI response only if there's content
       if (content.trim()) {
-        const response = await sendChatMessage(content, fileUrl);
+        const tempMessage = {
+          id: 'temp-' + Date.now(),
+          content: '',
+          role: 'assistant' as const,
+          timestamp: new Date(),
+          thinking: ['Starting to process...'] as string[]
+        };
         
-        // Add AI message
+        setMessages(prev => [...prev, tempMessage]);
+
+        const response = await sendChatMessage(
+          content, 
+          fileUrl,
+          quoteData?.content // Pass quote if exists
+        );
+        
+        // Update thinking steps in real time
+        setMessages(prev => 
+          prev.map(m => 
+            m.id === tempMessage.id 
+              ? { ...m, thinking: response.thinking_steps }
+              : m
+          )
+        );
+
+        // Add final AI message
         const aiMessage = await addMessage(
           conversationId,
           "assistant",
@@ -176,16 +197,21 @@ export function ChatInterface() {
           response.thinking_steps
         );
 
-        setMessages(prev => [...prev, {
-          ...aiMessage,
-          timestamp: new Date(aiMessage.created_at)
-        }]);
+        // Replace temp message with final
+        setMessages(prev => 
+          prev.map(m => 
+            m.id === tempMessage.id 
+              ? { ...aiMessage, timestamp: new Date(aiMessage.created_at) }
+              : m
+          )
+        );
       }
     } catch (error) {
       console.error("Error in chat:", error);
       toast.error("Failed to send message");
     } finally {
       setIsProcessing(false);
+      setQuoteData(null); // Clear quote after sending
     }
   };
 
@@ -297,7 +323,7 @@ export function ChatInterface() {
                           className="flex items-center gap-2 text-sm text-muted-foreground"
                         >
                           <div className="w-1.5 h-1.5 rounded-full bg-foreground/30 animate-pulse" />
-                          <span>{step}</span>
+                          <TextShimmer duration={2}>{step}</TextShimmer>
                         </div>
                       ))}
                     </div>

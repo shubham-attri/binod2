@@ -53,7 +53,7 @@ async def chat(message: ChatMessage):
     
     logging.info("--------------------------------")
     logging.info("Received message:")
-    logging.info(message.content)
+    logging.info(message)
     logging.info("--------------------------------")
 
     if not message.content.strip():

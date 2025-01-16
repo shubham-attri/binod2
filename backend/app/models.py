@@ -7,7 +7,8 @@ class ChatRequest(BaseModel):
 
 class ChatMessage(BaseModel):
     content: str
-    file_id: Optional[str] = None
+    file_Url: Optional[str] = None
+    quote: Optional[str] = None
 
 class ChatResponse(BaseModel):
     content: str

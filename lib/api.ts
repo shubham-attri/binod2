@@ -1,10 +1,15 @@
-export async function sendChatMessage(content: string, fileUrl?: string) {
+export async function sendChatMessage(
+  content: string, 
+  fileUrl?: string,
+  quote?: string
+) {
   const response = await fetch("/api/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ 
       content,
-      fileUrl 
+      fileUrl,
+      quote 
     })
   });
 
@@ -19,21 +24,30 @@ export async function sendChatMessage(content: string, fileUrl?: string) {
   const thinking_steps: string[] = [];
   let finalResponse = null;
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
 
-    const chunk = decoder.decode(value);
-    const lines = chunk.split("\n").filter(Boolean);
+      const chunk = decoder.decode(value);
+      const lines = chunk.split("\n").filter(Boolean);
 
-    for (const line of lines) {
-      const data = JSON.parse(line);
-      if (data.type === "thinking_step") {
-        thinking_steps.push(data.content);
-      } else if (data.type === "response") {
-        finalResponse = data;
+      for (const line of lines) {
+        try {
+          const data = JSON.parse(line);
+          if (data.type === "thinking_step") {
+            thinking_steps.push(data.content);
+            // You could emit an event or callback here for real-time updates
+          } else if (data.type === "response") {
+            finalResponse = data;
+          }
+        } catch (e) {
+          console.error('Failed to parse line:', line, e);
+        }
       }
     }
+  } finally {
+    reader.releaseLock();
   }
 
   if (!finalResponse) throw new Error("No response received");
