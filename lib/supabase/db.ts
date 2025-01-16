@@ -109,8 +109,16 @@ export async function uploadFile(file: File) {
 export async function getConversations() {
   const { data, error } = await supabase
     .from('conversations')
-    .select('*')
-    .order('created_at', { ascending: false });
+    .select(`
+      *,
+      messages (
+        content,
+        role,
+        created_at
+      )
+    `)
+    .order('is_favorite', { ascending: false })
+    .order('updated_at', { ascending: false });
 
   if (error) throw error;
   return data;
@@ -163,6 +171,24 @@ export async function deleteDocument(id: string) {
   const { error } = await supabase
     .from('documents')
     .delete()
+    .eq('id', id);
+
+  if (error) throw error;
+}
+
+export async function deleteConversation(id: string) {
+  const { error } = await supabase
+    .from('conversations')
+    .delete()
+    .eq('id', id);
+
+  if (error) throw error;
+}
+
+export async function toggleConversationFavorite(id: string, isFavorite: boolean) {
+  const { error } = await supabase
+    .from('conversations')
+    .update({ is_favorite: isFavorite })
     .eq('id', id);
 
   if (error) throw error;
