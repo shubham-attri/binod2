@@ -1,18 +1,17 @@
 "use client";
 
-import { Sidebar, SidebarBody, SidebarProvider } from "@/components/sidebar";
+import { Sidebar, SidebarBody } from "@/components/sidebar";
+import { ChatInterface } from "@/components/ChatInterface";
 
 export default function ChatPage() {
   return (
-    <SidebarProvider>
-      <div className="flex h-screen">
-        <Sidebar>
-          <SidebarBody />
-        </Sidebar>
-        <main className="flex-1 overflow-hidden">
-          {/* Your chat content */}
-        </main>
-      </div>
-    </SidebarProvider>
+    <div className="flex h-screen">
+      <Sidebar>
+        <SidebarBody />
+      </Sidebar>
+      <main className="flex-1 overflow-hidden">
+        <ChatInterface />
+      </main>
+    </div>
   );
 } 
