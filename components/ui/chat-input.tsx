@@ -1,185 +1,176 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-import { Loader2, CornerRightUp, Paperclip, X, FileUp } from "lucide-react";
+import { useState, useRef } from "react";
+import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-
-interface FileDisplayProps {
-  fileName: string;
-  onClear: () => void;
-}
-
-function FileDisplay({ fileName, onClear }: FileDisplayProps) {
-  return (
-    <div className="flex items-center gap-2 bg-background border rounded-md px-2 py-1 text-sm">
-      <FileUp className="h-4 w-4" />
-      <span className="truncate">{fileName}</span>
-      <button
-        type="button"
-        onClick={onClear}
-        className="ml-1 p-0.5 rounded-full hover:bg-muted/50"
-      >
-        <X className="h-3 w-3" />
-      </button>
-    </div>
-  );
-}
+import { Paperclip, CornerUpRight, Loader2, X } from "lucide-react";
+import { uploadFile } from "@/lib/supabase/db";
+import { toast } from "sonner";
 
 interface ChatInputProps {
-  onSubmit?: (value: string, file?: File) => void;
+  onSubmit: (message: string, file?: File) => Promise<void>;
   placeholder?: string;
-  disabled?: boolean;
   className?: string;
-  minHeight?: number;
-  maxHeight?: number;
-  initialValue?: string;
-  accept?: string;
-  maxFileSize?: number;
+  disabled?: boolean;
+  isProcessing?: boolean;
 }
 
-export function ChatInput({
-  onSubmit,
-  placeholder = "Message Binod...",
-  disabled,
+export function ChatInput({ 
+  onSubmit, 
+  placeholder = "Message...", 
   className,
-  minHeight = 56,
-  maxHeight = 200,
-  initialValue = "",
-  accept = "image/*,application/pdf,.doc,.docx,text/*",
-  maxFileSize = 5
+  disabled,
+  isProcessing 
 }: ChatInputProps) {
-  const [value, setValue] = useState(initialValue);
-  const [height, setHeight] = useState(minHeight);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [input, setInput] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [fileName, setFileName] = useState<string>("");
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const handleFileSelect = (file: File) => {
-    if (file.size > maxFileSize * 1024 * 1024) {
-      alert(`File size must be less than ${maxFileSize}MB`);
-      return;
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!input.trim() && !file) return;
+
+    try {
+      await onSubmit(input, file || undefined);
+      setInput("");
+      setFile(null);
+    } catch (error) {
+      toast.error("Failed to send message");
     }
-    setSelectedFile(file);
-    setFileName(file.name);
   };
 
-  const handlePaste = (e: ClipboardEvent) => {
-    const items = e.clipboardData?.items;
-    if (!items) return;
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = e.target.files?.[0];
+    if (selectedFile) {
+      // Check file size (10MB limit)
+      if (selectedFile.size > 10 * 1024 * 1024) {
+        toast.error("File size must be less than 10MB");
+        return;
+      }
 
-    for (const item of items) {
-      if (item.type.startsWith('image/')) {
-        const file = item.getAsFile();
-        if (file) handleFileSelect(file);
-        break;
+      try {
+        setIsUploading(true);
+        setFile(selectedFile);
+        toast.success("File attached");
+      } catch (error) {
+        toast.error("Failed to upload file");
+      } finally {
+        setIsUploading(false);
       }
     }
   };
 
-  useEffect(() => {
-    document.addEventListener('paste', handlePaste);
-    return () => document.removeEventListener('paste', handlePaste);
-  }, []);
+  const handlePaste = async (e: React.ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    const imageItem = Array.from(items || []).find(
+      item => item.type.indexOf('image') !== -1
+    );
 
-  const clearFile = () => {
-    setSelectedFile(null);
-    setFileName("");
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
-  };
-
-  const adjustHeight = () => {
-    const textarea = textareaRef.current;
-    if (textarea) {
-      textarea.style.height = 'auto';
-      const newHeight = Math.min(Math.max(textarea.scrollHeight, minHeight), maxHeight);
-      setHeight(newHeight);
-      textarea.style.height = `${newHeight}px`;
-    }
-  };
-
-  const handleSubmit = () => {
-    if (value.trim() || selectedFile) {
-      onSubmit?.(value, selectedFile || undefined);
-      setValue("");
-      clearFile();
-      if (textareaRef.current) {
-        textareaRef.current.style.height = `${minHeight}px`;
-        setHeight(minHeight);
+    if (imageItem) {
+      e.preventDefault();
+      const file = imageItem.getAsFile();
+      if (file) {
+        if (file.size > 10 * 1024 * 1024) {
+          toast.error("File size must be less than 10MB");
+          return;
+        }
+        setFile(file);
+        toast.success("Image attached");
       }
     }
   };
 
   return (
-    <div className={className}>
-      <div className="space-y-2">
-        {fileName && <FileDisplay fileName={fileName} onClear={clearFile} />}
-        <div className="relative flex items-center">
-          <Textarea
-            ref={textareaRef}
-            value={value}
-            onChange={(e) => {
-              setValue(e.target.value);
-              adjustHeight();
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                handleSubmit();
-              }
-            }}
-            placeholder={placeholder}
-            disabled={disabled}
-            className={cn(
-              "resize-none overflow-hidden pr-24",
-              "min-h-[56px] py-4 px-4",
-              disabled && "opacity-50 cursor-not-allowed"
-            )}
-            style={{ height }}
-          />
-
-          <div className="absolute right-2 flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="h-8 w-8 rounded-lg bg-background hover:bg-muted flex items-center justify-center"
-              disabled={disabled}
-            >
-              <Paperclip className="h-4 w-4" />
-            </button>
-
-            <button
-              onClick={handleSubmit}
-              disabled={disabled || (!value.trim() && !selectedFile)}
-              className={cn(
-                "h-8 w-8 rounded-lg bg-background hover:bg-muted flex items-center justify-center",
-                "transition-colors",
-                (disabled || (!value.trim() && !selectedFile)) && "opacity-50 cursor-not-allowed"
-              )}
-            >
-              {disabled ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <CornerRightUp className="h-4 w-4" />
-              )}
-            </button>
-          </div>
-
-          <input
-            type="file"
-            className="hidden"
-            ref={fileInputRef}
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) handleFileSelect(file);
-            }}
-            accept={accept}
-          />
+    <form onSubmit={handleSubmit} className={cn("relative", className)}>
+      {file && (
+        <div className="absolute -top-12 left-0 right-0 bg-muted p-2 rounded-md flex items-center gap-2">
+          {file.type.startsWith('image/') ? (
+            <img 
+              src={URL.createObjectURL(file)} 
+              alt="Preview" 
+              className="h-8 w-8 object-cover rounded"
+            />
+          ) : (
+            <div className="h-8 w-8 bg-primary/10 rounded flex items-center justify-center">
+              <Paperclip className="h-4 w-4 text-primary" />
+            </div>
+          )}
+          <span className="text-sm truncate flex-1">{file.name}</span>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => setFile(null)}
+          >
+            <X className="h-4 w-4" />
+          </Button>
         </div>
+      )}
+      
+      <div className="relative flex items-center">
+        <Textarea
+          ref={textareaRef}
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onPaste={handlePaste}
+          placeholder={isProcessing ? "Processing..." : placeholder}
+          className={cn(
+            "resize-none pr-24 py-3 max-h-40",
+            "scrollbar-thumb-rounded scrollbar-track-rounded",
+            "scrollbar-thin scrollbar-thumb-border",
+            isProcessing && "animate-pulse bg-muted/50"
+          )}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              handleSubmit(e);
+            }
+          }}
+          disabled={disabled || isProcessing}
+          rows={1}
+        />
+
+        <div className="absolute right-2 flex items-center gap-1">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={disabled || isProcessing || isUploading}
+          >
+            <Paperclip className="h-4 w-4 text-muted-foreground" />
+          </Button>
+
+          <Button
+            type="submit"
+            variant="ghost"
+            size="icon"
+            className={cn(
+              "h-8 w-8",
+              isProcessing && "animate-pulse"
+            )}
+            disabled={(!input.trim() && !file) || disabled || isProcessing}
+          >
+            {isProcessing ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <CornerUpRight className="h-4 w-4" />
+            )}
+          </Button>
+        </div>
+        
+        <input
+          type="file"
+          ref={fileInputRef}
+          className="hidden"
+          onChange={handleFileSelect}
+          accept="image/*,.pdf,.doc,.docx,.txt,.csv,.xlsx,.xls"
+        />
       </div>
-    </div>
+    </form>
   );
 } 

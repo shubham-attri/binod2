@@ -15,11 +15,15 @@ function getGreeting() {
 export default function Home() {
   const router = useRouter();
 
-  const handleSubmit = async (value: string, file?: File) => {
-    // Store initial query in localStorage
-    localStorage.setItem("initialQuery", value);
-    console.log("initialQuery", localStorage.getItem("initialQuery"));
-    router.push("/chat");
+  const handleSubmit = async (query: string) => {
+    if (!query.trim()) return;
+    
+    // Clear any existing conversation
+    sessionStorage.removeItem("currentConversationId");
+    
+    // Store query and redirect
+    localStorage.setItem("initialQuery", query);
+    router.push('/chat');
   };
 
   return (

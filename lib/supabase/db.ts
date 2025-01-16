@@ -85,25 +85,34 @@ export async function deleteMessagesAfter(conversationId: string, messageId: str
 }
 
 export async function uploadFile(file: File) {
-  const fileName = `${crypto.randomUUID()}-${file.name}`;
-  
-  const { data, error } = await supabase
-    .storage
-    .from('chat-files')
-    .upload(fileName, file);
+  try {
+    const fileName = `${crypto.randomUUID()}-${file.name}`;
+    
+    // Upload file to storage
+    const { error: uploadError } = await supabase
+      .storage
+      .from('chat-files')
+      .upload(fileName, file);
 
-  if (error) throw error;
-  
-  const { data: { publicUrl } } = supabase
-    .storage
-    .from('chat-files')
-    .getPublicUrl(fileName);
+    if (uploadError) throw uploadError;
+    
+    // Get public URL
+    const { data: { publicUrl } } = supabase
+      .storage
+      .from('chat-files')
+      .getPublicUrl(fileName);
 
-  return {
-    url: publicUrl,
-    name: file.name,
-    type: file.type
-  };
+    if (!publicUrl) throw new Error("Failed to get public URL");
+
+    return {
+      url: publicUrl,
+      name: file.name,
+      type: file.type
+    };
+  } catch (error) {
+    console.error("Upload error:", error);
+    throw error;
+  }
 }
 
 export async function getConversations() {

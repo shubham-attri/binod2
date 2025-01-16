@@ -34,6 +34,7 @@ interface HistoryItemProps {
 
 export function HistoryItem({ conversation, lastActivity, onUpdate }: HistoryItemProps) {
   const [isEditing, setIsEditing] = useState(false);
+  const [title, setTitle] = useState(conversation.title);
   const [isFavorite, setIsFavorite] = useState(conversation.is_favorite);
 
   const handleDelete = async () => {
@@ -53,6 +54,17 @@ export function HistoryItem({ conversation, lastActivity, onUpdate }: HistoryIte
       onUpdate();
     } catch (error) {
       toast.error("Failed to update favorite status");
+    }
+  };
+
+  const handleSave = async (newTitle: string) => {
+    try {
+      await updateConversationTitle(conversation.id, newTitle);
+      setTitle(newTitle);
+      onUpdate(); // Refresh history list
+      toast.success("Title updated");
+    } catch (error) {
+      toast.error("Failed to update title");
     }
   };
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { ChatInput } from "./ui/chat-input";
 import { ScrollArea } from "./ui/scroll-area";
 import { cn } from "@/lib/utils";
@@ -8,10 +8,10 @@ import { Copy, ThumbsUp, ThumbsDown, RotateCcw, X } from "lucide-react";
 import { Button } from "./ui/button";
 import { toast } from "sonner";
 import { sendChatMessage } from "@/lib/api";
-import { createConversation, addMessage, getConversation, deleteMessagesAfter, getThreadDocuments } from "@/lib/supabase/db";
+import { createConversation, addMessage, getConversation, deleteMessagesAfter, getThreadDocuments, uploadFile, addDocumentToThread } from "@/lib/supabase/db";
 import { ChatHeader } from "./chat-header";
 import { useFileUpload } from '@/hooks/use-file-upload';
-import { DocumentSheet } from "./document-sheet";
+import { Document } from "@/lib/supabase/types";
 
 interface Message {
   id: string;
@@ -39,96 +39,80 @@ export function ChatInterface() {
     type: string;
     created_at: string;
   }>>([]);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [isFavorite, setIsFavorite] = useState(false);
+  const [title, setTitle] = useState("New Chat");
 
-  // Load or create conversation
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  // Scroll when new messages are added
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  // Load conversation or create new one from initial query
   useEffect(() => {
     let mounted = true;
 
     async function initConversation() {
+      const savedId = sessionStorage.getItem("currentConversationId");
       const initialQuery = localStorage.getItem("initialQuery");
-      console.log("Starting conversation with query:", initialQuery);
-      
+
       try {
-        // Always create new conversation if there's an initial query
-        if (initialQuery && mounted) {
-          const conversation = await createConversation(
-            `Chat about: ${initialQuery.slice(0, 30)}...`
-          );
-          
-          if (!mounted) return; // Check if still mounted
-          
+        if (initialQuery && !savedId) {
+          // Create new conversation from initial query
+          const conversation = await createConversation(initialQuery.slice(0, 30) + "...");
+          if (!mounted) return;
+
           setConversationId(conversation.id);
+          setTitle(conversation.title);
           sessionStorage.setItem("currentConversationId", conversation.id);
-          
-          if (conversation.id) {
-            // Add user message first
-            const userMessage = await addMessage(conversation.id, "user", initialQuery);
-            
-            if (!mounted) return;
-            
-            setMessages(prev => [...prev, {
-              ...userMessage,
-              timestamp: new Date(userMessage.created_at)
-            }]);
 
-            // Get AI response
-            const response = await sendChatMessage(initialQuery);
-            
-            if (!mounted) return;
-            
-            // Add AI message
-            const aiMessage = await addMessage(
-              conversation.id,
-              "assistant",
-              response.content,
-              response.thinking_steps
-            );
+          // Add initial messages
+          const userMessage = await addMessage(conversation.id, "user", initialQuery);
+          setMessages(prev => [...prev, {
+            ...userMessage,
+            timestamp: new Date(userMessage.created_at)
+          }]);
 
-            setMessages(prev => [...prev, {
-              ...aiMessage,
-              timestamp: new Date(aiMessage.created_at)
-            }]);
+          const response = await sendChatMessage(initialQuery);
+          const aiMessage = await addMessage(
+            conversation.id,
+            "assistant",
+            response.content,
+            response.thinking_steps
+          );
 
-            // Clear initial query after processing
-            localStorage.removeItem("initialQuery");
-          }
-        } else if (mounted) {
-          // Load existing conversation or create new one
-          const savedId = sessionStorage.getItem("currentConversationId");
-          if (savedId) {
-            const conversation = await getConversation(savedId);
-            
-            if (!mounted) return;
-            
-            setConversationId(savedId);
-            setMessages(conversation.messages.map(msg => ({
-              ...msg,
-              timestamp: new Date(msg.created_at)
-            })));
-          } else {
-            const conversation = await createConversation("New Chat");
-            
-            if (!mounted) return;
-            
-            setConversationId(conversation.id);
-            sessionStorage.setItem("currentConversationId", conversation.id);
-          }
+          setMessages(prev => [...prev, {
+            ...aiMessage,
+            timestamp: new Date(aiMessage.created_at)
+          }]);
+
+          localStorage.removeItem("initialQuery");
+        } else if (savedId) {
+          // Load existing conversation
+          const conversation = await getConversation(savedId);
+          if (!mounted) return;
+
+          setConversationId(savedId);
+          setTitle(conversation.title);
+          setIsFavorite(conversation.is_favorite);
+          setMessages(conversation.messages.map((msg: any) => ({
+            ...msg,
+            timestamp: new Date(msg.created_at)
+          })));
         }
       } catch (error) {
-        if (mounted) {
-          console.error('Failed to initialize conversation:', error);
-          toast.error("Failed to start conversation");
-        }
+        console.error('Failed to initialize conversation:', error);
+        toast.error("Failed to start conversation");
       }
     }
 
     initConversation();
-
-    // Cleanup function
-    return () => {
-      mounted = false;
-    };
-  }, []); // Empty dependency array
+    return () => { mounted = false; };
+  }, []);
 
   useEffect(() => {
     if (conversationId) {
@@ -145,30 +129,33 @@ export function ChatInterface() {
   }, [conversationId]);
 
   const handleSubmit = async (content: string, file?: File) => {
+    // Prevent empty submissions
+    if (!content.trim() && !file) {
+      return;
+    }
+
+    if (!conversationId) return;
+    setIsProcessing(true);
+
     try {
-      setIsProcessing(true);
-      
+      // Handle file upload if present
       let fileData;
       if (file) {
-        fileData = await upload(file);
+        fileData = await uploadFile(file);
+        await addDocumentToThread(conversationId, {
+          name: file.name,
+          url: fileData.url,
+          type: file.type
+        });
       }
 
-      // Create conversation if needed
-      if (!conversationId) {
-        const conversation = await createConversation(
-          content.slice(0, 30) + "..."
-        );
-        setConversationId(conversation.id);
-        sessionStorage.setItem("currentConversationId", conversation.id);
-      }
-
-      // Add user message with quote if exists
+      // Add user message
       const userMessage = await addMessage(
-        conversationId!,
+        conversationId,
         "user",
-        quoteData ? `Regarding: "${quoteData.content}"\n\n${content}` : content,
+        content.trim(), // Ensure content is trimmed
         undefined,
-        fileData
+        file
       );
 
       setMessages(prev => [...prev, {
@@ -176,26 +163,25 @@ export function ChatInterface() {
         timestamp: new Date(userMessage.created_at)
       }]);
 
-      // Clear quote after sending
-      setQuoteData(null);
+      // Get AI response only if there's content
+      if (content.trim()) {
+        const response = await sendChatMessage(content);
+        
+        // Add AI message
+        const aiMessage = await addMessage(
+          conversationId,
+          "assistant",
+          response.content,
+          response.thinking_steps
+        );
 
-      // Get AI response
-      const response = await sendChatMessage(content, fileData?.url);
-      
-      const aiMessage = await addMessage(
-        conversationId!,
-        "assistant",
-        response.content,
-        response.thinking_steps
-      );
-
-      setMessages(prev => [...prev, {
-        ...aiMessage,
-        timestamp: new Date(aiMessage.created_at)
-      }]);
-
+        setMessages(prev => [...prev, {
+          ...aiMessage,
+          timestamp: new Date(aiMessage.created_at)
+        }]);
+      }
     } catch (error) {
-      console.error("Failed to send message:", error);
+      console.error("Error in chat:", error);
       toast.error("Failed to send message");
     } finally {
       setIsProcessing(false);
@@ -260,14 +246,21 @@ export function ChatInterface() {
     setDocuments(newDocuments);
   };
 
+  // Update title when it changes
+  const handleTitleUpdate = (newTitle: string) => {
+    setTitle(newTitle);
+  };
+
   return (
     <div className="flex flex-col h-screen bg-background font-sans">
       {conversationId && (
         <ChatHeader 
           conversationId={conversationId} 
-          initialTitle={messages[0]?.content.slice(0, 50) || "New Chat"}
+          title={title}
+          isFavorite={isFavorite}
           documents={documents}
           onDocumentsUpdate={handleDocumentsUpdate}
+          onTitleUpdate={handleTitleUpdate}
         />
       )}
       <ScrollArea className="flex-1 px-4 pb-4">
@@ -344,6 +337,7 @@ export function ChatInterface() {
               </div>
             </div>
           ))}
+          <div ref={messagesEndRef} />
         </div>
       </ScrollArea>
       

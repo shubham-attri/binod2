@@ -1,108 +1,79 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Input } from "./ui/input";
 import { Button } from "./ui/button";
-import { Pencil, Check, FileText } from "lucide-react";
-import { updateConversationTitle } from "@/lib/supabase/db";
+import { Star, FileText } from "lucide-react";
 import { DocumentSheet } from "./document-sheet";
+import { toggleConversationFavorite } from "@/lib/supabase/db";
+import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 
 interface ChatHeaderProps {
   conversationId: string;
-  initialTitle: string;
-  hasAttachments?: boolean;
+  title: string;
+  isFavorite: boolean;
   documents?: Document[];
   onDocumentsUpdate?: (documents: Document[]) => void;
+  onTitleUpdate: (title: string) => void;
 }
 
 export function ChatHeader({ 
   conversationId, 
-  initialTitle, 
-  hasAttachments,
+  title,
+  isFavorite,
   documents = [],
-  onDocumentsUpdate
+  onDocumentsUpdate,
+  onTitleUpdate
 }: ChatHeaderProps) {
-  const [isEditing, setIsEditing] = useState(false);
-  const [title, setTitle] = useState(initialTitle);
-  const [tempTitle, setTempTitle] = useState(initialTitle);
   const [showDocuments, setShowDocuments] = useState(false);
+  const [isStarred, setIsStarred] = useState(isFavorite);
 
   useEffect(() => {
-    const truncatedTitle = initialTitle.length > 30 
-      ? initialTitle.slice(0, 30) + "..."
-      : initialTitle;
-    setTitle(truncatedTitle);
-    setTempTitle(truncatedTitle);
-  }, [initialTitle]);
+    setIsStarred(isFavorite);
+  }, [isFavorite]);
 
-  const handleSave = async () => {
+  const handleFavorite = async () => {
     try {
-      await updateConversationTitle(conversationId, tempTitle);
-      setTitle(tempTitle);
-      setIsEditing(false);
+      await toggleConversationFavorite(conversationId, !isStarred);
+      setIsStarred(!isStarred);
+      toast.success(isStarred ? "Removed from favorites" : "Added to favorites");
     } catch (error) {
-      console.error("Failed to update title:", error);
-      setTempTitle(title);
+      toast.error("Failed to update favorite status");
     }
   };
 
   return (
     <div className="flex items-center justify-between px-4 py-2 bg-background font-sans">
-      <div className="flex items-center gap-2">
-        {/* Title editing section */}
-        {isEditing ? (
-          <div className="flex items-center gap-2">
-            <Input
-              value={tempTitle}
-              onChange={(e) => setTempTitle(e.target.value)}
-              className="max-w-md font-sans text-sm"
-              onKeyDown={(e) => {
-                if (e.key === "Enter") handleSave();
-                if (e.key === "Escape") {
-                  setTempTitle(title);
-                  setIsEditing(false);
-                }
-              }}
-              autoFocus
-            />
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={handleSave}
-              className="h-8 w-8"
-            >
-              <Check className="h-4 w-4" />
-            </Button>
-          </div>
-        ) : (
-          <div className="flex items-center gap-2">
-            <h1 className="text-sm font-medium">{title}</h1>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setIsEditing(true)}
-              className="h-8 w-8"
-            >
-              <Pencil className="h-4 w-4" />
-            </Button>
-          </div>
-        )}
+      <h1 className="text-sm font-medium truncate flex-1">{title}</h1>
+
+      <div className="flex items-center gap-1">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8"
+          onClick={handleFavorite}
+        >
+          <Star 
+            className={cn(
+              "h-4 w-4",
+              isStarred && "fill-yellow-400 text-yellow-400"
+            )} 
+          />
+        </Button>
+
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 relative"
+          onClick={() => setShowDocuments(!showDocuments)}
+        >
+          <FileText className="h-4 w-4" />
+          {documents.length > 0 && (
+            <span className="absolute top-1 right-1 w-2 h-2 bg-primary rounded-full" />
+          )}
+        </Button>
       </div>
 
-      {/* Document Toggle Button */}
-      <Button
-        variant="ghost"
-        size="icon"
-        className="h-8 w-8 relative"
-        onClick={() => setShowDocuments(!showDocuments)}
-      >
-        <FileText className="h-4 w-4 text-muted-foreground hover:text-foreground transition-colors" />
-        {documents.length > 0 && (
-          <span className="absolute top-1 right-1 w-2 h-2 bg-primary rounded-full" />
-        )}
-      </Button>
-
-      {/* Document Sheet */}
       <DocumentSheet 
         conversationId={conversationId}
         documents={documents}

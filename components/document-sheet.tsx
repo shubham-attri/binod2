@@ -10,6 +10,8 @@ import { useFileUpload } from "@/hooks/use-file-upload";
 import { uploadFile, getThreadDocuments, addDocumentToThread, deleteDocument } from "@/lib/supabase/db";
 import { toast } from "sonner";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Link } from "@/components/ui/link";
+import { supabase } from "@/lib/supabase/client";
 
 interface Document {
   id: string;
@@ -59,14 +61,20 @@ export function DocumentSheet({
 
   const handleFileUpload = async (file: File) => {
     try {
+      // First upload to storage
       const uploadResult = await uploadFile(file);
+      if (!uploadResult?.url) {
+        throw new Error("Failed to get upload URL");
+      }
       
+      // Then add to thread documents
       await addDocumentToThread(conversationId, {
         name: file.name,
         url: uploadResult.url,
         type: file.type
       });
 
+      // Refresh document list
       const updatedDocs = await getThreadDocuments(conversationId);
       onDocumentsUpdate?.(updatedDocs);
       
@@ -79,9 +87,41 @@ export function DocumentSheet({
 
   const handleDelete = async (id: string) => {
     try {
-      await deleteDocument(id);
-      const updatedDocs = await getThreadDocuments(conversationId);
+      toast.loading("Deleting document...");
+
+      // Get document details
+      const doc = documents.find(d => d.id === id);
+      if (!doc) {
+        toast.error("Document not found");
+        return;
+      }
+
+      // Delete from storage first
+      const fileUrl = new URL(doc.url);
+      const filePath = decodeURIComponent(fileUrl.pathname.split('/').pop() || '');
+      
+      if (filePath) {
+        const { error: storageError } = await supabase
+          .storage
+          .from('chat-files')
+          .remove([filePath]);
+
+        if (storageError) throw storageError;
+      }
+
+      // Delete from database
+      const { error: dbError } = await supabase
+        .from('documents')
+        .delete()
+        .match({ id });
+
+      if (dbError) throw dbError;
+
+      // Update UI
+      const updatedDocs = documents.filter(d => d.id !== id);
       onDocumentsUpdate?.(updatedDocs);
+
+      toast.dismiss();
       toast.success("Document deleted");
     } catch (error) {
       console.error("Failed to delete document:", error);
@@ -149,7 +189,7 @@ export function DocumentSheet({
                     <div className="flex flex-col min-w-0">
                       <div className="flex items-center gap-2">
                         <FileText className="h-4 w-4 shrink-0" />
-                        <span className="text-sm font-medium truncate">{doc.name}</span>
+                        <span className="text-sm font-medium">{doc.name}</span>
                       </div>
                       <span className="text-xs text-muted-foreground ml-6">
                         {formatDate(doc.created_at)}
