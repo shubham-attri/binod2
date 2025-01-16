@@ -46,6 +46,7 @@ async def generate_response(message: str):
 
 @app.post("/chat")
 async def chat(message: ChatMessage):
+
     if not message.content.strip():
         raise HTTPException(status_code=400, detail="Message cannot be empty")
     

@@ -3,7 +3,6 @@
 import { useState, useEffect, useRef } from "react";
 import { ChatInput } from "./ui/chat-input";
 import { ScrollArea } from "./ui/scroll-area";
-import { cn } from "@/lib/utils";
 import { Copy, ThumbsUp, ThumbsDown, RotateCcw, X } from "lucide-react"; 
 import { Button } from "./ui/button";
 import { toast } from "sonner";
@@ -129,7 +128,6 @@ export function ChatInterface() {
   }, [conversationId]);
 
   const handleSubmit = async (content: string, file?: File) => {
-    // Prevent empty submissions
     if (!content.trim() && !file) {
       return;
     }
@@ -139,21 +137,24 @@ export function ChatInterface() {
 
     try {
       // Handle file upload if present
-      let fileData;
+      let fileUrl: string | undefined;
       if (file) {
-        fileData = await uploadFile(file);
-        await addDocumentToThread(conversationId, {
-          name: file.name,
-          url: fileData.url,
-          type: file.type
-        });
+        const fileData = await uploadFile(file);
+        if (fileData?.url) {
+          fileUrl = fileData.url;
+          await addDocumentToThread(conversationId, {
+            name: file.name,
+            url: fileData.url,
+            type: file.type
+          });
+        }
       }
 
       // Add user message
       const userMessage = await addMessage(
         conversationId,
         "user",
-        content.trim(), // Ensure content is trimmed
+        content.trim(),
         undefined,
         file
       );
@@ -165,7 +166,7 @@ export function ChatInterface() {
 
       // Get AI response only if there's content
       if (content.trim()) {
-        const response = await sendChatMessage(content);
+        const response = await sendChatMessage(content, fileUrl);
         
         // Add AI message
         const aiMessage = await addMessage(

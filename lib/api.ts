@@ -1,8 +1,11 @@
-export async function sendChatMessage(message: string) {
+export async function sendChatMessage(content: string, fileUrl?: string) {
   const response = await fetch("/api/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ content: message })
+    body: JSON.stringify({ 
+      content,
+      fileUrl 
+    })
   });
 
   if (!response.ok) {
