@@ -10,7 +10,6 @@ import { useFileUpload } from "@/hooks/use-file-upload";
 import { uploadFile, getThreadDocuments, addDocumentToThread, deleteDocument } from "@/lib/supabase/db";
 import { toast } from "sonner";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
-import { Link } from "@/components/ui/link";
 import { supabase } from "@/lib/supabase/client";
 
 interface Document {

@@ -76,10 +76,10 @@ export function ChatHeader({
 
       <DocumentSheet 
         conversationId={conversationId}
-        documents={documents}
+        documents={documents as Document[]} // Cast documents to the correct type
         open={showDocuments}
         onOpenChange={setShowDocuments}
-        onDocumentsUpdate={onDocumentsUpdate}
+        onDocumentsUpdate={onDocumentsUpdate as (documents: Document[]) => void} // Cast onDocumentsUpdate to the correct type
       />
     </div>
   );

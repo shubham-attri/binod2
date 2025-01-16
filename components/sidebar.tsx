@@ -4,12 +4,12 @@ import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { useState } from "react";
 import { motion } from "framer-motion";
+import { useRouter } from "next/navigation";
 import { 
   MessageSquare, 
   Search, 
   Library, 
-  Vault, 
-  Plus,
+  Vault,
   History,
   Settings,
 } from "lucide-react";
@@ -25,32 +25,33 @@ const links: SidebarLink[] = [
   {
     label: "Chat",
     href: "/chat",
-    icon: <MessageSquare className="h-4 w-4" />,
+    icon: <MessageSquare className="h-4 w-4 text-primary" />,
   },
   {
     label: "Discover",
     href: "/discover",
-    icon: <Search className="h-4 w-4" />,
+    icon: <Search className="h-4 w-4 text-primary" />,
   },
   {
     label: "Vault",
     href: "/vault",
-    icon: <Vault className="h-4 w-4" />,
+    icon: <Vault className="h-4 w-4 text-primary" />,
   },
   {
     label: "Library",
     href: "/library",
-    icon: <Library className="h-4 w-4" />,
+    icon: <Library className="h-4 w-4 text-primary" />,
   },
   {
     label: "History",
     href: "/history",
-    icon: <History className="h-4 w-4" />,
+    icon: <History className="h-4 w-4 text-primary" />,
   },
 ];
 
 export function Sidebar({ children }: { children?: React.ReactNode }) {
   const [isExpanded, setIsExpanded] = useState(false);
+  const router = useRouter();
 
   return (
     <motion.div
@@ -60,15 +61,13 @@ export function Sidebar({ children }: { children?: React.ReactNode }) {
       onMouseLeave={() => setIsExpanded(false)}
       transition={{ duration: 0.2 }}
     >
-      {/* Logo Section */}
-      <div className="p-4 flex items-center gap-2">
-        <div className="w-8 h-8 shrink-0">
-          <svg viewBox="0 0 24 24" className="w-full h-full text-primary">
-            <path
-              fill="currentColor"
-              d="M12 2L2 19h20L12 2zm0 4l6.5 11h-13L12 6z"
-            />
-          </svg>
+      {/* Logo Section - Now clickable */}
+      <div 
+        className="p-4 flex items-center gap-2 cursor-pointer hover:opacity-80"
+        onClick={() => router.push('/')}
+      >
+        <div className="w-6 h-6 bg-foreground rounded-full flex items-center justify-center text-background text-sm font-bold shrink-0">
+          B
         </div>
         <motion.span
           initial={false}
@@ -80,25 +79,6 @@ export function Sidebar({ children }: { children?: React.ReactNode }) {
         >
           Agent Binod
         </motion.span>
-      </div>
-
-      {/* New Thread Button */}
-      <div className="px-3 py-2">
-        <Button 
-          variant="outline" 
-          className={cn(
-            "w-full bg-muted hover:bg-muted/80",
-            "text-foreground justify-start gap-2"
-          )}
-        >
-          <Plus className="h-4 w-4" />
-          <motion.span
-            animate={{ opacity: isExpanded ? 1 : 0 }}
-            className="whitespace-nowrap"
-          >
-            New Thread
-          </motion.span>
-        </Button>
       </div>
 
       {/* Navigation Links */}
@@ -129,7 +109,7 @@ export function Sidebar({ children }: { children?: React.ReactNode }) {
       </nav>
 
       {/* Bottom Section */}
-      <div className="p-3 mt-auto border-t border-border">
+      <div className="p-3 mt-auto border-t">
         <Button 
           variant="ghost" 
           className="w-full justify-start gap-2 text-muted-foreground hover:text-foreground"

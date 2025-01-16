@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { ChatInput } from "@/components/ui/chat-input";
 import { RetroGrid } from "@/components/ui/retro-grid";
@@ -14,6 +14,12 @@ function getGreeting() {
 
 export default function Home() {
   const router = useRouter();
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    // Focus input when component mounts or when navigated to
+    inputRef.current?.focus();
+  }, []);
 
   const handleSubmit = async (query: string) => {
     if (!query.trim()) return;
@@ -41,6 +47,7 @@ export default function Home() {
         </div>
 
         <ChatInput
+          ref={inputRef}
           onSubmit={handleSubmit}
           placeholder="Send a message to start a new chat..."
           className="font-sans"
