@@ -1,6 +1,16 @@
 import { supabase } from './client'
 import type { Database } from './types'
 
+// Add type for document
+type Document = {
+  id: string;
+  conversation_id: string;
+  name: string;
+  url: string;
+  type: string;
+  created_at: string;
+}
+
 export async function createConversation(title: string) {
   const { data, error } = await supabase
     .from('conversations')
@@ -110,6 +120,49 @@ export async function updateConversationTitle(id: string, title: string) {
   const { error } = await supabase
     .from('conversations')
     .update({ title })
+    .eq('id', id);
+
+  if (error) throw error;
+}
+
+export async function addDocumentToThread(
+  conversation_id: string,
+  document: {
+    name: string;
+    url: string;
+    type: string;
+  }
+): Promise<Document> {
+  const { data, error } = await supabase
+    .from('documents')
+    .insert({
+      conversation_id,
+      name: document.name,
+      url: document.url,
+      type: document.type
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function getThreadDocuments(conversation_id: string): Promise<Document[]> {
+  const { data, error } = await supabase
+    .from('documents')
+    .select('*')
+    .eq('conversation_id', conversation_id)
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteDocument(id: string) {
+  const { error } = await supabase
+    .from('documents')
+    .delete()
     .eq('id', id);
 
   if (error) throw error;

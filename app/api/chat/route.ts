@@ -5,6 +5,7 @@ const BACKEND_URL = process.env.DEV_SERVER_URL || 'http://localhost:8000';
 export async function POST(request: Request) {
   try {
     const body = await request.json();
+    const { content, fileUrl } = body;
     
     console.log('Connecting to backend:', BACKEND_URL);
     
@@ -13,9 +14,11 @@ export async function POST(request: Request) {
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(body),
-      // Add timeout and connection settings
-      signal: AbortSignal.timeout(15000), // 15 second timeout
+      body: JSON.stringify({ 
+        content,
+        file_url: fileUrl 
+      }),
+      signal: AbortSignal.timeout(15000),
     });
 
     if (!response.ok) {

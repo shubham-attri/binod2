@@ -14,7 +14,16 @@ export type Conversation = {
   updated_at: string
 }
 
-export type Database = {
+export type Document = {
+  id: string
+  conversation_id: string
+  name: string
+  url: string
+  type: string
+  created_at: string
+}
+
+export interface Database {
   public: {
     Tables: {
       conversations: {
@@ -26,6 +35,11 @@ export type Database = {
         Row: Message
         Insert: Omit<Message, 'id' | 'created_at'>
         Update: Partial<Omit<Message, 'id'>>
+      }
+      documents: {
+        Row: Document
+        Insert: Omit<Document, 'id' | 'created_at'>
+        Update: Partial<Omit<Document, 'id'>>
       }
     }
   }

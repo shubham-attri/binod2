@@ -14,6 +14,7 @@ sf() {
     git checkout -b "feature/$feature_name"
     
     echo "Created and switched to new feature branch: feature/$feature_name"
+    git push -u origin "feature/$feature_name"
 }
 
 mf() {

@@ -4,12 +4,14 @@ import { useState, useEffect } from "react";
 import { ChatInput } from "./ui/chat-input";
 import { ScrollArea } from "./ui/scroll-area";
 import { cn } from "@/lib/utils";
-import { Copy, ThumbsUp, ThumbsDown, RotateCcw, X } from "lucide-react"; // Removed PenLine import
+import { Copy, ThumbsUp, ThumbsDown, RotateCcw, X } from "lucide-react"; 
 import { Button } from "./ui/button";
 import { toast } from "sonner";
 import { sendChatMessage } from "@/lib/api";
-import { createConversation, addMessage, getConversation, deleteMessagesAfter } from "@/lib/supabase/db";
+import { createConversation, addMessage, getConversation, deleteMessagesAfter, getThreadDocuments } from "@/lib/supabase/db";
 import { ChatHeader } from "./chat-header";
+import { useFileUpload } from '@/hooks/use-file-upload';
+import { DocumentSheet } from "./document-sheet";
 
 interface Message {
   id: string;
@@ -30,6 +32,13 @@ export function ChatInterface() {
   const [quoteData, setQuoteData] = useState<QuoteData | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
+  const { upload, isUploading } = useFileUpload();
+  const [documents, setDocuments] = useState<Array<{
+    name: string;
+    url: string;
+    type: string;
+    created_at: string;
+  }>>([]);
 
   // Load or create conversation
   useEffect(() => {
@@ -121,59 +130,75 @@ export function ChatInterface() {
     };
   }, []); // Empty dependency array
 
-  const handleSubmit = async (value: string, file?: File) => {
-    if (!conversationId || isProcessing) return;
-    setIsProcessing(true);
+  useEffect(() => {
+    if (conversationId) {
+      const loadDocuments = async () => {
+        try {
+          const docs = await getThreadDocuments(conversationId);
+          setDocuments(docs);
+        } catch (error) {
+          console.error("Failed to load documents:", error);
+        }
+      };
+      loadDocuments();
+    }
+  }, [conversationId]);
 
+  const handleSubmit = async (content: string, file?: File) => {
     try {
-      // Handle file upload if present
-      let messageContent = value;
+      setIsProcessing(true);
+      
+      let fileData;
       if (file) {
-        messageContent = `${value} [File: ${file.name}]`;
+        fileData = await upload(file);
       }
 
-      // Add user message
-      const userMessage = await addMessage(conversationId, "user", messageContent);
+      // Create conversation if needed
+      if (!conversationId) {
+        const conversation = await createConversation(
+          content.slice(0, 30) + "..."
+        );
+        setConversationId(conversation.id);
+        sessionStorage.setItem("currentConversationId", conversation.id);
+      }
+
+      // Add user message with quote if exists
+      const userMessage = await addMessage(
+        conversationId!,
+        "user",
+        quoteData ? `Regarding: "${quoteData.content}"\n\n${content}` : content,
+        undefined,
+        fileData
+      );
+
       setMessages(prev => [...prev, {
         ...userMessage,
         timestamp: new Date(userMessage.created_at)
       }]);
 
-      // Create placeholder for AI response with thinking steps
-      const aiPlaceholder: Message = {
-        id: crypto.randomUUID(),
-        content: "",
-        role: "assistant",
-        timestamp: new Date(),
-        thinking: []
-      };
-      setMessages(prev => [...prev, aiPlaceholder]);
+      // Clear quote after sending
+      setQuoteData(null);
 
-      // Get AI response with streaming thinking steps
-      const response = await sendChatMessage(messageContent);
+      // Get AI response
+      const response = await sendChatMessage(content, fileData?.url);
       
-      // Add final AI message
       const aiMessage = await addMessage(
-        conversationId, 
-        "assistant", 
+        conversationId!,
+        "assistant",
         response.content,
         response.thinking_steps
       );
 
-      // Update messages with final response
-      setMessages(prev => prev.map(msg => 
-        msg.id === aiPlaceholder.id ? {
-          ...aiMessage,
-          timestamp: new Date(aiMessage.created_at)
-        } : msg
-      ));
+      setMessages(prev => [...prev, {
+        ...aiMessage,
+        timestamp: new Date(aiMessage.created_at)
+      }]);
 
     } catch (error) {
-      console.error('Error:', error);
+      console.error("Failed to send message:", error);
       toast.error("Failed to send message");
     } finally {
       setIsProcessing(false);
-      setQuoteData(null);
     }
   };
 
@@ -231,12 +256,18 @@ export function ChatInterface() {
     }
   };
 
+  const handleDocumentsUpdate = (newDocuments: Document[]) => {
+    setDocuments(newDocuments);
+  };
+
   return (
     <div className="flex flex-col h-screen bg-background font-sans">
       {conversationId && (
         <ChatHeader 
           conversationId={conversationId} 
-          initialTitle={messages[0]?.content.slice(0, 50) || "New Chat"} 
+          initialTitle={messages[0]?.content.slice(0, 50) || "New Chat"}
+          documents={documents}
+          onDocumentsUpdate={handleDocumentsUpdate}
         />
       )}
       <ScrollArea className="flex-1 px-4 pb-4">
