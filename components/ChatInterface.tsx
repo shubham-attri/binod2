@@ -164,16 +164,18 @@ export function ChatInterface() {
       }]);
 
       if (content.trim()) {
+        // Create temporary message for showing thinking steps
         const tempMessage = {
           id: 'temp-' + Date.now(),
           content: '',
           role: 'assistant' as const,
           timestamp: new Date(),
-          thinking: ['Starting to process...'] as string[]
+          thinking: [] as string[]
         };
         
         setMessages(prev => [...prev, tempMessage]);
 
+        // Start streaming response
         const response = await sendChatMessage(
           content, 
           fileUrl,
@@ -181,15 +183,17 @@ export function ChatInterface() {
         );
         
         // Update thinking steps in real time
-        setMessages(prev => 
-          prev.map(m => 
-            m.id === tempMessage.id 
-              ? { ...m, thinking: response.thinking_steps }
-              : m
-          )
-        );
+        if (response.thinking_steps?.length) {
+          setMessages(prev => 
+            prev.map(m => 
+              m.id === tempMessage.id 
+                ? { ...m, thinking: response.thinking_steps }
+                : m
+            )
+          );
+        }
 
-        // Add the final message while keeping the thinking steps message
+        // Add final AI message
         const aiMessage = await addMessage(
           conversationId,
           "assistant",
@@ -197,18 +201,21 @@ export function ChatInterface() {
           response.thinking_steps
         );
 
-        // Add the final message while keeping the thinking steps message
-        setMessages(prev => [...prev, {
-          ...aiMessage,
-          timestamp: new Date(aiMessage.created_at)
-        }]);
+        // Replace temp message with final
+        setMessages(prev => 
+          prev.map(m => 
+            m.id === tempMessage.id 
+              ? { ...aiMessage, timestamp: new Date(aiMessage.created_at) }
+              : m
+          )
+        );
       }
     } catch (error) {
       console.error("Error in chat:", error);
       toast.error("Failed to send message");
     } finally {
       setIsProcessing(false);
-      setQuoteData(null); // Clear quote after sending
+      setQuoteData(null);
     }
   };
 

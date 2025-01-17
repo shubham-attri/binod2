@@ -21,45 +21,63 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-async def generate_thinking_steps():
-    steps = [
-        "Analyzing the query...",
-        "Processing information...",
-        "Formulating response...",
-    ]
-    for step in steps:
-        yield json.dumps({"type": "thinking_step", "content": step}) + "\n"
-        await asyncio.sleep(0.5)  # Simulate processing time
-
-async def generate_response(message: str):
-    # Generate thinking steps first
-    async for step in generate_thinking_steps():
-        yield step
-    
-    # Then send the final response
-    response = f"This is a simulated response to: '{message}'"
-    yield json.dumps({
-        "type": "response",
-        "content": response,
-        "thinking_steps": [
-            "Analyzed the query",
-            "Processed information",
-            "Formulated response"
+async def stream_agent_steps(message: ChatMessage):
+    """Stream the agent's thinking process and final response"""
+    try:
+        # Example agent steps - replace with your actual agent logic
+        agent_steps = [
+            "Reading and analyzing input...",
+            "Processing document context..." if message.file_Url else None,
+            "Analyzing quoted text..." if message.quote else None,
+            "Searching relevant information...",
+            "Formulating response...",
+            "Validating answer..."
         ]
-    }) + "\n"
+
+        # Filter out None steps
+        agent_steps = [step for step in agent_steps if step]
+
+        # Stream thinking steps
+        for step in agent_steps:
+            yield json.dumps({
+                "type": "thinking_step",
+                "content": step
+            }) + "\n"
+            await asyncio.sleep(0.8)  # Simulate processing time
+
+        # Stream final response
+        response_text = f"This is a response to: '{message.content}'"
+        if message.quote:
+            response_text += f"\nRegarding the quote: '{message.quote}'"
+        if message.file_Url:
+            response_text += f"\nI've also analyzed the document at: {message.file_Url}"
+
+        yield json.dumps({
+            "type": "response",
+            "content": response_text,
+            "thinking_steps": agent_steps
+        }) + "\n"
+
+    except Exception as e:
+        logging.error(f"Error in stream_agent_steps: {e}")
+        yield json.dumps({
+            "type": "error",
+            "content": str(e)
+        }) + "\n"
 
 @app.post("/chat")
 async def chat(message: ChatMessage):
-    
     logging.info("--------------------------------")
     logging.info("Received message:")
-    logging.info(message)
+    logging.info(f"Content: {message.content}")
+    logging.info(f"File URL: {message.file_Url}")
+    logging.info(f"Quote: {message.quote}")
     logging.info("--------------------------------")
 
     if not message.content.strip():
         raise HTTPException(status_code=400, detail="Message cannot be empty")
     
     return StreamingResponse(
-        generate_response(message.content),
+        stream_agent_steps(message),
         media_type="text/event-stream"
     ) 
