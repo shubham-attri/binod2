@@ -1,6 +1,6 @@
 "use client";
 
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/utils/utils";
 import Link from "next/link";
 import { useState } from "react";
 import { motion } from "framer-motion";
@@ -13,7 +13,7 @@ import {
   History,
   Settings,
 } from "lucide-react";
-import { Button } from "./ui/button";
+import { Button } from "@/components/ui/button";
 
 interface SidebarLink {
   label: string;

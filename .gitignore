@@ -48,3 +48,4 @@ backend/app/__pycache__
 
 # github workflows
 .github/workflows/webpack.yml
+.cursor/

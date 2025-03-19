@@ -3,7 +3,7 @@
 import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/utils/utils";
 import { Paperclip, CornerUpRight, Loader2, X } from "lucide-react";
 import { uploadFile } from "@/lib/supabase/db";
 import { toast } from "sonner";

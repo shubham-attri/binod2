@@ -1,12 +1,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Button } from "./ui/button";
+import { Button } from "@/components/ui/button";
 import { Star, FileText } from "lucide-react";
-import { DocumentSheet } from "./document-sheet";
+import { DocumentSheet } from "@/components/shared/document-sheet";
 import { toggleConversationFavorite } from "@/lib/supabase/db";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/utils/utils";
+import { Document } from "@/lib/supabase/types";
 
 interface ChatHeaderProps {
   conversationId: string;

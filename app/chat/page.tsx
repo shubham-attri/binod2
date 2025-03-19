@@ -1,7 +1,7 @@
 "use client";
 
-import { Sidebar } from "@/components/sidebar";
-import { ChatInterface } from "@/components/ChatInterface";
+import { Sidebar } from "@/components/layout/sidebar";
+import { ChatInterface } from "@/components/chat/ChatInterface";
 
 export default function ChatPage() {
   return (

@@ -15,7 +15,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/utils/utils";
 import Link from "next/link";
 import { updateConversationTitle, deleteConversation, toggleConversationFavorite } from "@/lib/supabase/db";
 import { Input } from "@/components/ui/input";

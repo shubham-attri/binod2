@@ -1,17 +1,17 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { ChatInput } from "./ui/chat-input";
-import { ScrollArea } from "./ui/scroll-area";
+import { ChatInput } from "@/components/ui/chat-input";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Copy, ThumbsUp, ThumbsDown, RotateCcw, X } from "lucide-react"; 
-import { Button } from "./ui/button";
+import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { sendChatMessage } from "@/lib/api";
+import { sendChatMessage } from "@/lib/api/api";
 import { createConversation, addMessage, getConversation, deleteMessagesAfter, getThreadDocuments, uploadFile, addDocumentToThread } from "@/lib/supabase/db";
-import { ChatHeader } from "./chat-header";
+import { ChatHeader } from "@/components/chat/chat-header";
 import { useFileUpload } from '@/hooks/use-file-upload';
 import { Document } from "@/lib/supabase/types";
-import { TextShimmer } from "./ui/text-shimmer";
+import { TextShimmer } from "@/components/ui/text-shimmer";
 
 interface Message {
   id: string;
