@@ -45,3 +45,6 @@ rules.md
 # backend
 backend/venv
 backend/app/__pycache__
+
+# github workflows
+.github/workflows/webpack.yml
