@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { ChatInput } from "@/components/ui/chat-input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Copy, ThumbsUp, ThumbsDown, RotateCcw, X, Paperclip } from "lucide-react"; 
+import { Copy, ThumbsUp, ThumbsDown, RotateCcw, X, Paperclip, ChevronDown, ChevronUp } from "lucide-react"; 
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { sendChatMessage } from "@/lib/api/api";
@@ -19,13 +19,27 @@ interface Message {
   role: "user" | "assistant";
   timestamp: Date;
   thinking?: string[];
+  files?: File[];
 }
 
 interface QuoteData {
   content: string;
   messageId: string;
   type: 'quote';
+  isCollapsed: boolean;
 }
+
+// Update the addMessage function call to handle multiple files
+const addMessageWithFiles = async (
+  conversationId: string,
+  role: "user" | "assistant",
+  content: string,
+  thinking_steps?: string[],
+  files?: File[]
+) => {
+  const message = await addMessage(conversationId, role, content, thinking_steps);
+  return { ...message, files };
+};
 
 export function ChatInterface() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -128,34 +142,36 @@ export function ChatInterface() {
     }
   }, [conversationId]);
 
-  const handleSubmit = async (content: string, file?: File) => {
-    if (!content.trim() && !file) return;
+  const handleSubmit = async (content: string, files?: File[]) => {
+    if (!content.trim() && (!files || files.length === 0)) return;
     if (!conversationId) return;
     
     setIsProcessing(true);
 
     try {
-      // Handle file upload if present
-      let fileUrl: string | undefined;
-      if (file) {
-        const fileData = await uploadFile(file);
-        if (fileData?.url) {
-          fileUrl = fileData.url;
-          await addDocumentToThread(conversationId, {
-            name: file.name,
-            url: fileData.url,
-            type: file.type
-          });
+      // Handle file uploads if present
+      const fileUrls: string[] = [];
+      if (files && files.length > 0) {
+        for (const file of files) {
+          const fileData = await uploadFile(file);
+          if (fileData?.url) {
+            fileUrls.push(fileData.url);
+            await addDocumentToThread(conversationId, {
+              name: file.name,
+              url: fileData.url,
+              type: file.type
+            });
+          }
         }
       }
 
       // Add user message
-      const userMessage = await addMessage(
+      const userMessage = await addMessageWithFiles(
         conversationId,
         "user",
         content.trim(),
         undefined,
-        file
+        files
       );
 
       setMessages(prev => [...prev, {
@@ -178,7 +194,7 @@ export function ChatInterface() {
         // Start streaming response
         const response = await sendChatMessage(
           content, 
-          fileUrl,
+          fileUrls.join(','), // Join URLs with comma
           quoteData?.content
         );
         
@@ -268,7 +284,8 @@ export function ChatInterface() {
       setQuoteData({
         content: selection,
         messageId,
-        type: 'quote'
+        type: 'quote',
+        isCollapsed: false
       });
     }
   };
@@ -379,20 +396,42 @@ export function ChatInterface() {
               <div className="relative">
                 <div className="absolute left-0 top-0 bottom-0 w-[2px] bg-border" />
                 <div className="pl-3">
-                  <p className="text-xs text-muted-foreground mb-1">Quote:</p>
-                  <div className="flex items-start gap-2">
-                    <p className="text-sm flex-1 text-foreground/80 break-words">
-                      {quoteData.content}
-                    </p>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-6 w-6 shrink-0 -mt-1"
-                      onClick={() => setQuoteData(null)}
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="text-xs text-muted-foreground">Quote:</p>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 w-6 p-0"
+                        onClick={() => setQuoteData(prev => 
+                          prev ? { ...prev, isCollapsed: !prev.isCollapsed } : null
+                        )}
+                      >
+                        {quoteData.isCollapsed ? (
+                          <ChevronDown className="h-4 w-4" />
+                        ) : (
+                          <ChevronUp className="h-4 w-4" />
+                        )}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 w-6 p-0"
+                        onClick={() => setQuoteData(null)}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
+                  {!quoteData.isCollapsed && (
+                    <div className="flex items-start gap-2">
+                      <p className="text-sm flex-1 text-foreground/80 break-words whitespace-pre-wrap">
+                        {quoteData.content}
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
