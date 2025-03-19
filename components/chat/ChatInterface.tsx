@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { ChatInput } from "@/components/ui/chat-input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Copy, ThumbsUp, ThumbsDown, RotateCcw, X } from "lucide-react"; 
+import { Copy, ThumbsUp, ThumbsDown, RotateCcw, X, Paperclip } from "lucide-react"; 
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { sendChatMessage } from "@/lib/api/api";
@@ -318,7 +318,7 @@ export function ChatInterface() {
                     <div className="w-6 h-6 bg-blue-500 rounded-full" />
                   )}
                 </div>
-                <div className="flex-1 min-w-0">
+                <div className="flex-1 min-w-0 overflow-hidden">
                   {message.thinking ? (
                     <div className="space-y-2">
                       {message.thinking.map((step, i) => (
@@ -327,18 +327,18 @@ export function ChatInterface() {
                           className="flex items-center gap-2 text-sm text-muted-foreground"
                         >
                           <div className="w-1.5 h-1.5 rounded-full bg-foreground/30 animate-pulse" />
-                          <TextShimmer duration={2}>{step}</TextShimmer>
+                          <TextShimmer duration={2} className="break-words whitespace-pre-wrap">{step}</TextShimmer>
                         </div>
                       ))}
                     </div>
                   ) : (
                     <>
-                      <p className="text-sm text-foreground">{message.content}</p>
+                      <p className="text-sm text-foreground break-words whitespace-pre-wrap">{message.content}</p>
                       <div className="flex justify-end gap-1 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-6 w-6"
+                          className="h-6 w-6 shrink-0"
                           onClick={() => handleCopy(message.content)}
                         >
                           <Copy className="h-4 w-4" />
@@ -348,19 +348,19 @@ export function ChatInterface() {
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-6 w-6"
+                              className="h-6 w-6 shrink-0"
                               onClick={() => handleRetry(message.id)}
                             >
                               <RotateCcw className="h-4 w-4" />
                             </Button>
-                            <Button variant="ghost" size="icon" className="h-6 w-6">
+                            <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0">
                               <ThumbsUp className="h-4 w-4" />
                             </Button>
-                            <Button variant="ghost" size="icon" className="h-6 w-6">
+                            <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0">
                               <ThumbsDown className="h-4 w-4" />
                             </Button>
                           </>
-                        ) : null} {/* Removed PenLine button */}
+                        ) : null}
                       </div>
                     </>
                   )}
@@ -374,27 +374,70 @@ export function ChatInterface() {
       
       <div className="flex-none px-4 py-4 bg-background">
         <div className="max-w-2xl mx-auto">
-          {quoteData && (
-            <div className="relative mb-2">
-              <div className="absolute left-0 top-0 bottom-0 w-[2px] bg-border" />
-              <div className="pl-3">
-                <p className="text-xs text-muted-foreground mb-1">Quote:</p>
-                <div className="flex items-start gap-2">
-                  <p className="text-sm flex-1 text-foreground/80">
-                    {quoteData.content}
-                  </p>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6 shrink-0 -mt-1"
-                    onClick={() => setQuoteData(null)}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
+          <div className="space-y-2 mb-2">
+            {quoteData && (
+              <div className="relative">
+                <div className="absolute left-0 top-0 bottom-0 w-[2px] bg-border" />
+                <div className="pl-3">
+                  <p className="text-xs text-muted-foreground mb-1">Quote:</p>
+                  <div className="flex items-start gap-2">
+                    <p className="text-sm flex-1 text-foreground/80 break-words">
+                      {quoteData.content}
+                    </p>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 shrink-0 -mt-1"
+                      onClick={() => setQuoteData(null)}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
+            )}
+            {documents.length > 0 && (
+              <div className="relative">
+                <div className="absolute left-0 top-0 bottom-0 w-[2px] bg-border" />
+                <div className="pl-3">
+                  <p className="text-xs text-muted-foreground mb-1">Attachments:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {documents.map((doc, index) => (
+                      <div 
+                        key={index}
+                        className="flex items-center gap-2 bg-muted p-2 rounded-md"
+                      >
+                        {doc.type.startsWith('image/') ? (
+                          <img 
+                            src={doc.url} 
+                            alt={doc.name}
+                            className="h-8 w-8 object-cover rounded"
+                          />
+                        ) : (
+                          <div className="h-8 w-8 bg-primary/10 rounded flex items-center justify-center">
+                            <Paperclip className="h-4 w-4 text-primary" />
+                          </div>
+                        )}
+                        <span className="text-sm truncate max-w-[150px]">{doc.name}</span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 w-6 p-0"
+                          onClick={() => {
+                            const newDocs = documents.filter((_, i) => i !== index);
+                            setDocuments(newDocs);
+                          }}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
           <ChatInput
             onSubmit={handleSubmit}
             placeholder="Message Binod..."
