@@ -16,5 +16,4 @@ jobs:
       with:
         node-version: '23.x'
     - run: npm install
-    - run: npx webpack
 
