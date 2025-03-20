@@ -9,11 +9,76 @@ services:
       # the host machine's environment or .env file. It could be used for
       # development purposes, such as connecting to frontend services or
       # external APIs during development.
-      - DEV_SERVER_URL=http://localhost:8000
+      - DEV_SERVER_URL=http://localhost:3000
+      - REDIS_URL=redis://redis:6379
+      - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY}
+      - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY}
+      - LANGFUSE_HOST=http://langfuse:3000
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
     restart: unless-stopped
+    depends_on:
+      - redis
+      - langfuse
+    networks:
+      - binod-network
+
+  redis:
+    image: redislabs/redisai:latest
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - binod-network
+
+  langfuse:
+    image: langfuse/langfuse:latest
+    ports:
+      - "3001:3000"
+    environment:
+      DATABASE_URL: "postgres://langfuse:password@postgres:5432/langfuse"
+      NEXTAUTH_SECRET: ${LANGFUSE_NEXTAUTH_SECRET:-randomsecret}
+      CLICKHOUSE_URL: "clickhouse://clickhouse:8123/langfuse"
+      CLICKHOUSE_USER: "default"
+      CLICKHOUSE_PASSWORD: ""
+      SALT: ${LANGFUSE_SALT:-randomsalt}
+      NEXTAUTH_URL: "http://localhost:3001"
+    depends_on:
+      - postgres
+      - clickhouse
+    networks:
+      - binod-network
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: "langfuse"
+      POSTGRES_USER: "langfuse"
+      POSTGRES_PASSWORD: "password"
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    networks:
+      - binod-network
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:23.8
+    environment:
+      CLICKHOUSE_DB: "langfuse"
+      CLICKHOUSE_USER: "default"
+      CLICKHOUSE_PASSWORD: ""
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+    volumes:
+      - clickhouse-data:/var/lib/clickhouse
     networks:
       - binod-network
 
 networks:
   binod-network:
-    driver: bridge 
+    driver: bridge
+
+volumes:
+  redis-data:
+  pg-data:
+  clickhouse-data: 

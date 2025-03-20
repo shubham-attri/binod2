@@ -1,0 +1,23 @@
+model_list:
+  - model_name: gpt-3.5-turbo
+    litellm_params:
+      model: gpt-3.5-turbo
+      api_key: ${OPENAI_API_KEY}
+
+litellm_settings:
+  success_callback: ["langfuse"]
+  callbacks: ["langfuse"]
+
+general_settings:
+  # Set to 'local' for local deployment
+  environment: local
+  # Enable detailed logging
+  debug: false
+  # Set maximum number of retries for failed requests
+  max_retries: 3
+
+# Langfuse configuration for logging
+langfuse:
+  public_key: ${LANGFUSE_PUBLIC_KEY}
+  secret_key: ${LANGFUSE_SECRET_KEY}
+  host: http://langfuse:3000 
