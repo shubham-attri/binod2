@@ -2,13 +2,8 @@ fastapi
 uvicorn
 pydantic
 redis
-langchain
-langchain-community
-langchain-redis
-langchain-openai
-langgraph
-sentence-transformers
 redis-om
+sentence-transformers
 langfuse
 websockets
 python-dotenv
@@ -16,4 +11,4 @@ numpy
 tenacity
 loguru
 redisvl
-litellm>=1.10.0
+litellm
