@@ -39,13 +39,18 @@ services:
     ports:
       - "3001:3000"
     environment:
-      DATABASE_URL: "postgres://langfuse:password@postgres:5432/langfuse"
+      DATABASE_URL: "postgresql://langfuse:password@postgres:5432/langfuse"
       NEXTAUTH_SECRET: ${LANGFUSE_NEXTAUTH_SECRET:-randomsecret}
-      CLICKHOUSE_URL: "clickhouse://clickhouse:8123/langfuse"
+      CLICKHOUSE_URL: "http://clickhouse:8123"
+      CLICKHOUSE_MIGRATION_URL: "clickhouse://clickhouse:9000"
       CLICKHOUSE_USER: "default"
       CLICKHOUSE_PASSWORD: ""
       SALT: ${LANGFUSE_SALT:-randomsalt}
       NEXTAUTH_URL: "http://localhost:3001"
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_AUTH: mypassword
+      ENCRYPTION_KEY: ${LANGFUSE_ENCRYPTION_KEY}
     depends_on:
       - postgres
       - clickhouse

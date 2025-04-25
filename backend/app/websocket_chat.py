@@ -49,7 +49,7 @@ class ChatManager:
     async def get_chat_history(self, thread_id: str):
         try:
             # Get recent messages for the thread
-            messages = await self.session_manager.get_recent(top_k=10)
+            messages = self.session_manager.get_recent(top_k=10)
             return messages
         except Exception as e:
             print(f"Error getting chat history: {e}")
@@ -57,7 +57,7 @@ class ChatManager:
 
     async def store_message(self, thread_id: str, role: str, content: str):
         try:
-            await self.session_manager.add_message({
+            self.session_manager.add_message({
                 "role": role,
                 "content": content,
                 "thread_id": thread_id,

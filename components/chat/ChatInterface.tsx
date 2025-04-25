@@ -113,10 +113,11 @@ export function ChatInterface() {
           setConversationId(savedId);
           setTitle(conversation.title);
           setIsFavorite(conversation.is_favorite);
-          setMessages(conversation.messages.map((msg: any) => ({
-            ...msg,
-            timestamp: new Date(msg.created_at)
-          })));
+          // Sort messages by timestamp for proper Q/A pairing
+          const sortedMsgs = conversation.messages
+            .map((msg: any) => ({ ...msg, timestamp: new Date(msg.created_at) }))
+            .sort((a: any, b: any) => a.timestamp.getTime() - b.timestamp.getTime());
+          setMessages(sortedMsgs);
         }
       } catch (error) {
         console.error('Failed to initialize conversation:', error);
