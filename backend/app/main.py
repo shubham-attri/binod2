@@ -1,11 +1,17 @@
-from fastapi import FastAPI, WebSocket, Request, HTTPException
+from fastapi import FastAPI, WebSocket, Request, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 import logging
-from .websocket_chat import chat_endpoint, chat_manager
+from .websocket_chat import chat_endpoint
 from .vector_indexer import indexer
-from fastapi.responses import StreamingResponse
-import json
-import asyncio
+import os, tempfile
+from pathlib import Path
+from supabase import create_client, Client 
+from langchain_community.document_loaders import PyPDFLoader, TextLoader, Docx2txtLoader
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -13,6 +19,11 @@ logger = logging.getLogger(__name__)
 
 # Initialize FastAPI app
 app = FastAPI()
+
+# Initialize Supabase client
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # Add CORS middleware
 app.add_middleware(
@@ -77,3 +88,50 @@ async def ingest_documents(request: Request):
     count = indexer.ingest(project_id, text)
     logger.info(f"Indexed {count} chunks for project_id={project_id}")
     return {"ingested_chunks": count}
+
+@app.post("/upload-document")
+async def upload_document(conversation_id: str = Form(...), file: UploadFile = File(...)):
+    """Upload a document, extract text, index into Redis, and store in Supabase."""
+    # Save to temp file
+    suffix = Path(file.filename).suffix
+    contents = await file.read()
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+        tmp.write(contents)
+        tmp_path = tmp.name
+    logger.info(f"Saved upload to {tmp_path}")
+    # Load document
+    if file.content_type == "application/pdf":
+        loader = PyPDFLoader(tmp_path)
+        documents = loader.load()
+    elif file.content_type in ["text/plain", "text/markdown"]:
+        loader = TextLoader(tmp_path, encoding="utf-8")
+        documents = loader.load()
+    elif file.content_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+        loader = Docx2txtLoader(tmp_path)
+        documents = loader.load()
+    else:
+        raise HTTPException(status_code=415, detail="Unsupported file type")
+    # Chunk text
+    splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+    docs = splitter.split_documents(documents)
+    logger.info(f"Split document into {len(docs)} chunks")
+    # Index text chunks via shared vector_indexer
+    text_chunks = [doc.page_content for doc in docs]
+    count = indexer.ingest_chunks(conversation_id, text_chunks)
+    logger.info(f"Indexed {count} chunks for conversation {conversation_id}")
+    # Cleanup temp file
+    os.remove(tmp_path)
+    # Upload to Supabase storage
+    bucket = supabase.storage.from_("documents")
+    path = f"{conversation_id}/{file.filename}"
+    bucket.upload(path, contents)
+    public_url = bucket.get_public_url(path).get("publicUrl")
+    logger.info(f"Uploaded file to Supabase: {public_url}")
+    # Persist metadata
+    supabase.table("documents").insert({
+        "conversation_id": conversation_id,
+        "file_name": file.filename,
+        "file_url": public_url,
+        "ingested_chunks": len(docs)
+    }).execute()
+    return {"file_url": public_url, "ingested_chunks": len(docs)}

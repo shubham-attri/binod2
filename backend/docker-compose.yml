@@ -4,17 +4,15 @@ services:
     ports:
       - "8000:8000"
     environment:
-      # DEV_SERVER_URL is the URL of the development server that the backend
-      # can communicate with. This is passed as an environment variable from
-      # the host machine's environment or .env file. It could be used for
-      # development purposes, such as connecting to frontend services or
-      # external APIs during development.
       - DEV_SERVER_URL=http://localhost:3000
       - REDIS_URL=redis://redis:6379
       - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY}
       - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY}
       - LANGFUSE_HOST=http://langfuse:3000
       - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_KEY=${SUPABASE_KEY}
+
     restart: unless-stopped
     depends_on:
       - redis

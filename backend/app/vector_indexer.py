@@ -68,19 +68,17 @@ class DocumentVectorIndexer:
         logger.info(f"Received ingestion request for project_id={project_id}")
         chunks = chunk_text(text, chunk_size)
         logger.info(f"Split text into {len(chunks)} chunks")
-        # Batch embed to bytes for storage
+        return self.ingest_chunks(project_id, chunks, batch_size)
+
+    def ingest_chunks(self, project_id: str, chunks: List[str], batch_size: int = 10) -> int:
+        """Embed and index pre-split text chunks."""
+        logger.info(f"Received ingestion for project_id={project_id}, chunks={len(chunks)}")
         embeddings = self.vectorizer.embed_many(chunks, batch_size=batch_size, as_buffer=True)
         dim = len(embeddings[0])
-        # Ensure index
         self.create_index(project_id, dim)
-        # Store each chunk
         for i, (chunk, emb) in enumerate(zip(chunks, embeddings)):
             key = f"rag:{project_id}:{i}"
-            # HSET supports binary values when decode_responses=False
-            self.redis.hset(key, mapping={
-                "content": chunk,
-                "embedding": emb
-            })
+            self.redis.hset(key, mapping={"content": chunk, "embedding": emb})
         logger.info(f"Successfully ingested {len(chunks)} chunks for project_id={project_id}")
         return len(chunks)
 

@@ -6,10 +6,9 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Copy, ThumbsUp, ThumbsDown, RotateCcw, X, Paperclip, ChevronDown, ChevronUp } from "lucide-react"; 
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { sendChatMessage } from "@/lib/api/api";
-import { createConversation, addMessage, getConversation, deleteMessagesAfter, getThreadDocuments, uploadFile, addDocumentToThread } from "@/lib/supabase/db";
+import { sendChatMessage, uploadDocument } from "@/lib/api/api";
+import { createConversation, addMessage, getConversation, deleteMessagesAfter, getThreadDocuments } from "@/lib/supabase/db";
 import { ChatHeader } from "@/components/chat/chat-header";
-import { useFileUpload } from '@/hooks/use-file-upload';
 import { Document } from "@/lib/supabase/types";
 import { TextShimmer } from "@/components/ui/text-shimmer";
 
@@ -46,7 +45,6 @@ export function ChatInterface() {
   const [quoteData, setQuoteData] = useState<QuoteData | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
-  const { upload, isUploading } = useFileUpload();
   const [documents, setDocuments] = useState<Array<{
     name: string;
     url: string;
@@ -154,16 +152,13 @@ export function ChatInterface() {
       const fileUrls: string[] = [];
       if (files && files.length > 0) {
         for (const file of files) {
-          const fileData = await uploadFile(file);
-          if (fileData?.url) {
-            fileUrls.push(fileData.url);
-            await addDocumentToThread(conversationId, {
-              name: file.name,
-              url: fileData.url,
-              type: file.type
-            });
-          }
+          const { file_url, ingested_chunks } = await uploadDocument(conversationId, file);
+          toast.success(`Ingested ${ingested_chunks} chunks from ${file.name}`);
+          fileUrls.push(file_url);
         }
+        // Refresh document list
+        const docs = await getThreadDocuments(conversationId);
+        setDocuments(docs);
       }
 
       // Add user message

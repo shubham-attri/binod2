@@ -89,3 +89,17 @@ export async function sendChatMessage(
     throw error;
   }
 } 
+export async function uploadDocument(
+  conversationId: string,
+  file: File
+): Promise<{ file_url: string; ingested_chunks: number }> {
+  const form = new FormData()
+  form.append("conversation_id", conversationId)
+  form.append("file", file)
+  const res = await fetch("http://localhost:8000/upload-document", {
+    method: "POST",
+    body: form,
+  })
+  if (!res.ok) throw new Error(await res.text())
+  return await res.json()
+}

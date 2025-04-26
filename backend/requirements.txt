@@ -12,3 +12,15 @@ tenacity
 loguru
 redisvl
 litellm
+huggingface_hub[hf_xet]
+
+# Document ingestion dependencies
+langchain
+pypdf2
+python-docx
+langchain-community
+python-multipart
+pypdf
+
+# Supabase client for storage
+supabase
