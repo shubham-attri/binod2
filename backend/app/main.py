@@ -1,7 +1,8 @@
-from fastapi import FastAPI, WebSocket, Request
+from fastapi import FastAPI, WebSocket, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import logging
 from .websocket_chat import chat_endpoint, chat_manager
+from .vector_indexer import indexer
 from fastapi.responses import StreamingResponse
 import json
 import asyncio
@@ -63,3 +64,16 @@ async def websocket_endpoint_with_thread(websocket: WebSocket, thread_id: str):
 #         generate_response(),
 #         media_type="text/event-stream"
 #     )
+
+@app.post("/ingest")
+async def ingest_documents(request: Request):
+    """Ingest text into Redis vector index for a project."""
+    data = await request.json()
+    project_id = data.get("project_id")
+    text = data.get("text")
+    if not project_id or not text:
+        raise HTTPException(status_code=400, detail="project_id and text are required")
+    logger.info(f"Received ingestion request: project_id={project_id}, text_length={len(text)}")
+    count = indexer.ingest(project_id, text)
+    logger.info(f"Indexed {count} chunks for project_id={project_id}")
+    return {"ingested_chunks": count}
