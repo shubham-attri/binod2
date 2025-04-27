@@ -9,6 +9,8 @@ from supabase import create_client, Client
 from langchain_community.document_loaders import PyPDFLoader, TextLoader, Docx2txtLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from dotenv import load_dotenv
+from storage3.exceptions import StorageApiError
+from typing import List
 
 # Load environment variables from .env file
 load_dotenv()
@@ -25,11 +27,11 @@ SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# Add CORS middleware
+# Configure CORS for frontend access
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Adjust this in production
-    allow_credentials=True,
+    allow_origins=["*"],              # allow all origins for development
+    allow_credentials=False,           # no cookies/auth needed here
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -121,17 +123,30 @@ async def upload_document(conversation_id: str = Form(...), file: UploadFile = F
     logger.info(f"Indexed {count} chunks for conversation {conversation_id}")
     # Cleanup temp file
     os.remove(tmp_path)
-    # Upload to Supabase storage
-    bucket = supabase.storage.from_("documents")
+    # Upload to Supabase storage (ensure bucket exists)
+    bucket_id = "chat-files"
+    storage = supabase.storage
     path = f"{conversation_id}/{file.filename}"
-    bucket.upload(path, contents)
-    public_url = bucket.get_public_url(path).get("publicUrl")
+    try:
+        bucket = storage.from_(bucket_id)
+        bucket.upload(path, contents)
+    except StorageApiError as e:
+        # Create bucket if missing
+        if getattr(e, 'statusCode', None) == 404 or "Bucket not found" in str(e):
+            storage.create_bucket(bucket_id, public=True)
+            bucket = storage.from_(bucket_id)
+            bucket.upload(path, contents)
+        else:
+            raise HTTPException(status_code=500, detail=f"Storage upload error: {e}")
+    # get_public_url returns a direct URL string
+    public_url = bucket.get_public_url(path)
     logger.info(f"Uploaded file to Supabase: {public_url}")
     # Persist metadata
     supabase.table("documents").insert({
         "conversation_id": conversation_id,
         "file_name": file.filename,
         "file_url": public_url,
+        "file_type": file.content_type,
         "ingested_chunks": len(docs)
     }).execute()
     return {"file_url": public_url, "ingested_chunks": len(docs)}

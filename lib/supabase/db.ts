@@ -1,15 +1,5 @@
 import { supabase } from './client'
-import type { Database } from './types'
-
-// Add type for document
-type Document = {
-  id: string;
-  conversation_id: string;
-  name: string;
-  url: string;
-  type: string;
-  created_at: string;
-}
+import type { Database, Document } from './types'
 
 export async function createConversation(title: string) {
   const { data, error } = await supabase
@@ -173,7 +163,16 @@ export async function getThreadDocuments(conversation_id: string): Promise<Docum
     .order('created_at', { ascending: false });
 
   if (error) throw error;
-  return data;
+  // Map storage columns to frontend document shape
+  return (data as any[]).map(d => ({
+    id: d.id,
+    conversation_id: d.conversation_id,
+    name: d.file_name,
+    url: d.file_url,
+    type: d.file_type,
+    ingested_chunks: d.ingested_chunks,
+    created_at: d.created_at,
+  }));
 }
 
 export async function deleteDocument(id: string) {

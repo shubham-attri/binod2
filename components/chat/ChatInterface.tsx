@@ -45,12 +45,7 @@ export function ChatInterface() {
   const [quoteData, setQuoteData] = useState<QuoteData | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
-  const [documents, setDocuments] = useState<Array<{
-    name: string;
-    url: string;
-    type: string;
-    created_at: string;
-  }>>([]);
+  const [documents, setDocuments] = useState<Document[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [isFavorite, setIsFavorite] = useState(false);
   const [title, setTitle] = useState("New Chat");
@@ -442,7 +437,7 @@ export function ChatInterface() {
                         key={index}
                         className="flex items-center gap-2 bg-muted p-2 rounded-md"
                       >
-                        {doc.type.startsWith('image/') ? (
+                        {doc.type?.startsWith('image/') ? (
                           <img 
                             src={doc.url} 
                             alt={doc.name}

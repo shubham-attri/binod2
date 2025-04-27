@@ -21,6 +21,7 @@ export type Message = {
     name: string
     url: string
     type: string
+    ingested_chunks: number
     created_at: string
   }
   

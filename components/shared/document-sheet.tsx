@@ -11,14 +11,7 @@ import { uploadFile, getThreadDocuments, addDocumentToThread, deleteDocument } f
 import { toast } from "sonner";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { supabase } from "@/lib/supabase/client";
-
-interface Document {
-  id: string;
-  name: string;
-  url: string;
-  type: string;
-  created_at: string;
-}
+import type { Document } from "@/lib/supabase/types";
 
 interface DocumentSheetProps {
   conversationId: string;
