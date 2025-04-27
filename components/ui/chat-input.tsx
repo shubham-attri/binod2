@@ -168,7 +168,7 @@ export function ChatInput({
       )}
       
       <div className="space-y-2">
-        <div className="border-2 border-border/80 rounded-xl overflow-hidden">
+        <div className="border-2 border-black rounded-xl overflow-hidden">
           <Textarea
             ref={textareaRef}
             value={input}
@@ -191,66 +191,59 @@ export function ChatInput({
             rows={1}
           />
 
-          <div className="flex items-center justify-end gap-3 p-2  border-border/80 bg-background/50">
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className={cn(
-                "h-9 w-9 rounded-xl hover:bg-primary/5",
-                mode === 'research' && "text-blue-500 bg-blue-500/5 hover:bg-blue-500/10"
-              )}
-              onClick={() => setMode(mode === 'agentic' ? 'research' : 'agentic')}
-              disabled={disabled || isProcessing}
-              title={mode === 'agentic' ? "Switch to Research Mode" : "Switch to Agentic Mode"}
-            >
-              {mode === 'agentic' ? (
-                <Brain className="h-5 w-5 text-muted-foreground" />
-              ) : (
+          <div className="flex items-center justify-between gap-3 p-2 bg-background">
+            <div className="flex items-center gap-3">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={() => setMode('agentic')}
+                disabled={disabled || isProcessing}
+                className={cn(
+                  'h-9 w-9 rounded-xl',
+                  mode === 'agentic' ? 'bg-black text-white' : 'text-black'
+                )}
+                title="Agentic Mode"
+              >
+                <Brain className="h-5 w-5" />
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={() => setMode('research')}
+                disabled={disabled || isProcessing}
+                className={cn(
+                  'h-9 w-9 rounded-xl',
+                  mode === 'research' ? 'bg-black text-white' : 'text-black'
+                )}
+                title="Research Mode"
+              >
                 <Search className="h-5 w-5" />
-              )}
-            </Button>
-
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-9 w-9 rounded-xl hover:bg-primary/5"
-              disabled={disabled || isProcessing}
-              title="Web Search"
-            >
-              <Globe2 className="h-5 w-5 text-muted-foreground" />
-            </Button>
-
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-9 w-9 rounded-xl hover:bg-primary/5"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={disabled || isProcessing || isUploading || files.length >= 5}
-              title={files.length >= 5 ? "Maximum files reached" : "Attach files"}
-            >
-              <Paperclip className={cn(
-                "h-5 w-5",
-                files.length >= 5 ? "text-muted-foreground/50" : "text-muted-foreground"
-              )} />
-            </Button>
-
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={disabled || isProcessing || isUploading || files.length >= 5}
+                className="h-9 w-9 text-black"
+                title={files.length >= 5 ? 'Maximum files reached' : 'Attach files'}
+              >
+                <Paperclip className="h-5 w-5" />
+              </Button>
+            </div>
             <Button
               type="submit"
-              variant="secondary"
+              variant="ghost"
               size="icon"
-              className={cn(
-                "h-9 w-9 bg-primary/10 hover:bg-primary/20 rounded-xl transition-colors",
-                isProcessing && "animate-pulse"
-              )}
+              className={cn('h-9 w-9 rounded-xl text-black', isProcessing && 'animate-pulse')}
               disabled={(!input.trim() && files.length === 0) || disabled || isProcessing}
             >
               {isProcessing ? (
-                <Loader2 className="h-5 w-5 animate-spin" />
+                <Loader2 className="h-5 w-5 animate-spin text-black" />
               ) : (
-                <CornerUpRight className="h-5 w-5" />
+                <CornerUpRight className="h-5 w-5 text-black" />
               )}
             </Button>
           </div>

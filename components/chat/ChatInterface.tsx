@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { ChatInput } from "@/components/ui/chat-input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Copy, ThumbsUp, ThumbsDown, RotateCcw, X, Paperclip, ChevronDown, ChevronUp } from "lucide-react"; 
+import { Copy, ThumbsUp, ThumbsDown, RotateCcw, X, ChevronDown, ChevronUp } from "lucide-react"; 
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { sendChatMessage, uploadDocument } from "@/lib/api/api";
@@ -49,6 +49,16 @@ export function ChatInterface() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [isFavorite, setIsFavorite] = useState(false);
   const [title, setTitle] = useState("New Chat");
+  const [expandedMessages, setExpandedMessages] = useState<Set<string>>(new Set());
+
+  const toggleExpanded = (id: string) => {
+    setExpandedMessages(prev => {
+      const copy = new Set(prev);
+      if (copy.has(id)) copy.delete(id);
+      else copy.add(id);
+      return copy;
+    });
+  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -341,7 +351,27 @@ export function ChatInterface() {
                     </div>
                   ) : (
                     <>
-                      <p className="text-sm text-foreground break-words whitespace-pre-wrap">{message.content}</p>
+                      {message.role === 'user' ? (
+                        <>
+                          <p className={"text-sm text-foreground break-words whitespace-pre-wrap " + (expandedMessages.has(message.id) ? "" : "max-h-12 overflow-hidden")}>
+                            {message.content}
+                          </p>
+                          {!expandedMessages.has(message.id) && message.content.length > 100 && (
+                            <button className="text-xs text-primary mt-1" onClick={() => toggleExpanded(message.id)}>
+                              Read more
+                            </button>
+                          )}
+                          {expandedMessages.has(message.id) && (
+                            <button className="text-xs text-primary mt-1" onClick={() => toggleExpanded(message.id)}>
+                              Show less
+                            </button>
+                          )}
+                        </>
+                      ) : (
+                        <p className="text-sm text-foreground break-words whitespace-pre-wrap">
+                          {message.content}
+                        </p>
+                      )}
                       <div className="flex justify-end gap-1 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
                         <Button
                           variant="ghost"
@@ -423,47 +453,6 @@ export function ChatInterface() {
                       </p>
                     </div>
                   )}
-                </div>
-              </div>
-            )}
-            {documents.length > 0 && (
-              <div className="relative">
-                <div className="absolute left-0 top-0 bottom-0 w-[2px] bg-border" />
-                <div className="pl-3">
-                  <p className="text-xs text-muted-foreground mb-1">Attachments:</p>
-                  <div className="flex flex-wrap gap-2">
-                    {documents.map((doc, index) => (
-                      <div 
-                        key={index}
-                        className="flex items-center gap-2 bg-muted p-2 rounded-md"
-                      >
-                        {doc.type?.startsWith('image/') ? (
-                          <img 
-                            src={doc.url} 
-                            alt={doc.name}
-                            className="h-8 w-8 object-cover rounded"
-                          />
-                        ) : (
-                          <div className="h-8 w-8 bg-primary/10 rounded flex items-center justify-center">
-                            <Paperclip className="h-4 w-4 text-primary" />
-                          </div>
-                        )}
-                        <span className="text-sm truncate max-w-[150px]">{doc.name}</span>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="h-6 w-6 p-0"
-                          onClick={() => {
-                            const newDocs = documents.filter((_, i) => i !== index);
-                            setDocuments(newDocs);
-                          }}
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
                 </div>
               </div>
             )}
