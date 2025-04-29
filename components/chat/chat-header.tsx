@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Star, FileText } from "lucide-react";
+import { Star, FileText, Loader2 } from "lucide-react";
 import { DocumentSheet } from "@/components/shared/document-sheet";
 import { toggleConversationFavorite } from "@/lib/supabase/db";
 import { toast } from "sonner";
@@ -16,6 +16,7 @@ interface ChatHeaderProps {
   documents?: Document[];
   onDocumentsUpdate?: (documents: Document[]) => void;
   onTitleUpdate: (title: string) => void;
+  isDocUploading?: boolean;
 }
 
 export function ChatHeader({ 
@@ -24,7 +25,8 @@ export function ChatHeader({
   isFavorite,
   documents = [],
   onDocumentsUpdate,
-  onTitleUpdate
+  onTitleUpdate,
+  isDocUploading = false
 }: ChatHeaderProps) {
   const [showDocuments, setShowDocuments] = useState(false);
   const [isStarred, setIsStarred] = useState(isFavorite);
@@ -68,9 +70,15 @@ export function ChatHeader({
           className="h-8 w-8 relative"
           onClick={() => setShowDocuments(!showDocuments)}
         >
-          <FileText className="h-4 w-4" />
-          {documents.length > 0 && (
-            <span className="absolute top-1 right-1 w-2 h-2 bg-primary rounded-full" />
+          {isDocUploading ? (
+            <Loader2 className="h-4 w-4 animate-spin text-foreground" />
+          ) : (
+            <>
+              <FileText className="h-4 w-4" />
+              {documents.length > 0 && (
+                <span className="absolute top-1 right-1 w-2 h-2 bg-primary rounded-full" />
+              )}
+            </>
           )}
         </Button>
       </div>

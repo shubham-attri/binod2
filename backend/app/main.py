@@ -51,32 +51,6 @@ async def websocket_endpoint_with_thread(websocket: WebSocket, thread_id: str):
     """WebSocket endpoint for chat with thread ID"""
     await chat_endpoint(websocket, thread_id)
 
-# @app.post("/api/chat")
-# async def chat_http(request: Request):
-#     """HTTP endpoint to maintain compatibility with existing frontend"""
-#     data = await request.json()
-#     content = data.get("content", "").strip()
-    
-#     async def generate_response():
-#         # Send thinking steps
-#         thinking_steps = [
-#             "Analyzing your message...",
-#             "Processing the request...",
-#             "Generating response..."
-#         ]
-        
-#         for step in thinking_steps:
-#             yield f"data: {json.dumps({'type': 'thinking_step', 'content': step})}\n\n"
-#             await asyncio.sleep(0.5)
-        
-#         # Send final response
-#         response = f"This is a dummy response to: {content}"
-#         yield f"data: {json.dumps({'type': 'response', 'content': response, 'thinking_steps': thinking_steps})}\n\n"
-    
-#     return StreamingResponse(
-#         generate_response(),
-#         media_type="text/event-stream"
-#     )
 
 @app.post("/ingest")
 async def ingest_documents(request: Request):

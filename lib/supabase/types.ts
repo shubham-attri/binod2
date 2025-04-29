@@ -45,4 +45,16 @@ export type Message = {
         }
       }
     }
-  } 
+  }
+
+export interface UIMessage {
+  id: string;
+  content: string;
+  role: 'user' | 'assistant';
+  timestamp: Date;
+  thinking?: string[];
+  files?: File[];
+  file_url?: string;
+  file_name?: string;
+  file_type?: string;
+}

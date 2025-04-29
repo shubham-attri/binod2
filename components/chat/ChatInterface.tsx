@@ -3,23 +3,14 @@
 import { useState, useEffect, useRef } from "react";
 import { ChatInput } from "@/components/ui/chat-input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Copy, ThumbsUp, ThumbsDown, RotateCcw, X, ChevronDown, ChevronUp } from "lucide-react"; 
+import { Copy, ThumbsUp, ThumbsDown, RotateCcw, X, ChevronDown, ChevronUp, Paperclip, Loader2 } from "lucide-react"; 
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { sendChatMessage, uploadDocument } from "@/lib/api/api";
 import { createConversation, addMessage, getConversation, deleteMessagesAfter, getThreadDocuments } from "@/lib/supabase/db";
 import { ChatHeader } from "@/components/chat/chat-header";
-import { Document } from "@/lib/supabase/types";
+import type { Document, UIMessage } from "@/lib/supabase/types";
 import { TextShimmer } from "@/components/ui/text-shimmer";
-
-interface Message {
-  id: string;
-  content: string;
-  role: "user" | "assistant";
-  timestamp: Date;
-  thinking?: string[];
-  files?: File[];
-}
 
 interface QuoteData {
   content: string;
@@ -28,7 +19,7 @@ interface QuoteData {
   isCollapsed: boolean;
 }
 
-// Update the addMessage function call to handle multiple files
+// Call addMessage with file support and return UIMessage
 const addMessageWithFiles = async (
   conversationId: string,
   role: "user" | "assistant",
@@ -36,16 +27,23 @@ const addMessageWithFiles = async (
   thinking_steps?: string[],
   files?: File[]
 ) => {
-  const message = await addMessage(conversationId, role, content, thinking_steps);
-  return { ...message, files };
+  let messageData;
+  if (files && files.length > 0) {
+    // attach first file for message
+    messageData = await addMessage(conversationId, role, content, thinking_steps, files[0]);
+    return { ...messageData, files: [files[0]] };
+  }
+  messageData = await addMessage(conversationId, role, content, thinking_steps);
+  return { ...messageData };
 };
 
 export function ChatInterface() {
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<UIMessage[]>([]);
   const [quoteData, setQuoteData] = useState<QuoteData | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [documents, setDocuments] = useState<Document[]>([]);
+  const [isDocUploading, setIsDocUploading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [isFavorite, setIsFavorite] = useState(false);
   const [title, setTitle] = useState("New Chat");
@@ -88,7 +86,12 @@ export function ChatInterface() {
           sessionStorage.setItem("currentConversationId", conversation.id);
 
           // Add initial messages
-          const userMessage = await addMessage(conversation.id, "user", initialQuery);
+          const userMessage = await addMessageWithFiles(
+            conversation.id,
+            "user",
+            initialQuery
+          );
+
           setMessages(prev => [...prev, {
             ...userMessage,
             timestamp: new Date(userMessage.created_at)
@@ -148,27 +151,37 @@ export function ChatInterface() {
 
   const handleSubmit = async (content: string, files?: File[]) => {
     if (!content.trim() && (!files || files.length === 0)) return;
-    if (!conversationId) return;
-    
+    // ensure conversation exists
+    let convId: string;
+    if (conversationId) {
+      convId = conversationId;
+    } else {
+      const convo = await createConversation(title);
+      setConversationId(convo.id);
+      sessionStorage.setItem("currentConversationId", convo.id);
+      convId = convo.id;
+    }
     setIsProcessing(true);
 
     try {
       // Handle file uploads if present
       const fileUrls: string[] = [];
       if (files && files.length > 0) {
+        setIsDocUploading(true);
         for (const file of files) {
-          const { file_url, ingested_chunks } = await uploadDocument(conversationId, file);
+          const { file_url, ingested_chunks } = await uploadDocument(convId, file);
           toast.success(`Ingested ${ingested_chunks} chunks from ${file.name}`);
           fileUrls.push(file_url);
         }
         // Refresh document list
-        const docs = await getThreadDocuments(conversationId);
+        const docs = await getThreadDocuments(convId);
         setDocuments(docs);
+        setIsDocUploading(false);
       }
 
       // Add user message
       const userMessage = await addMessageWithFiles(
-        conversationId,
+        convId,
         "user",
         content.trim(),
         undefined,
@@ -212,7 +225,7 @@ export function ChatInterface() {
 
         // Add final AI message
         const aiMessage = await addMessage(
-          conversationId,
+          convId,
           "assistant",
           response.content,
           response.thinking_steps
@@ -310,6 +323,7 @@ export function ChatInterface() {
           documents={documents}
           onDocumentsUpdate={handleDocumentsUpdate}
           onTitleUpdate={handleTitleUpdate}
+          isDocUploading={isDocUploading}
         />
       )}
       <ScrollArea className="flex-1 px-4 pb-4">
@@ -337,33 +351,40 @@ export function ChatInterface() {
                   )}
                 </div>
                 <div className="flex-1 min-w-0 overflow-hidden">
-                  {message.thinking ? (
+                  {message.thinking !== undefined ? (
                     <div className="space-y-2">
-                      {message.thinking.map((step, i) => (
-                        <div 
-                          key={i}
-                          className="flex items-center gap-2 text-sm text-muted-foreground"
-                        >
-                          <div className="w-1.5 h-1.5 rounded-full bg-foreground/30 animate-pulse" />
-                          <TextShimmer duration={2} className="break-words whitespace-pre-wrap">{step}</TextShimmer>
+                      {message.thinking.length > 0 ? (
+                        message.thinking.map((step, i) => (
+                          <div 
+                            key={i}
+                            className="flex items-center gap-2 text-sm text-muted-foreground"
+                          >
+                            <div className="w-1.5 h-1.5 rounded-full bg-foreground/30 animate-pulse" />
+                            <TextShimmer duration={2} className="break-words whitespace-pre-wrap">{step}</TextShimmer>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          <span>Generating...</span>
                         </div>
-                      ))}
+                      )}
                     </div>
                   ) : (
                     <>
                       {message.role === 'user' ? (
                         <>
-                          <p className={"text-sm text-foreground break-words whitespace-pre-wrap " + (expandedMessages.has(message.id) ? "" : "max-h-12 overflow-hidden")}>
-                            {message.content}
-                          </p>
-                          {!expandedMessages.has(message.id) && message.content.length > 100 && (
+                          <div className="relative overflow-hidden" style={!expandedMessages.has(message.id) ? { maxHeight: '80px' } : undefined}>
+                            <p className="text-sm text-foreground break-words whitespace-pre-wrap">
+                              {message.content}
+                            </p>
+                            {!expandedMessages.has(message.id) && (
+                              <div className="absolute bottom-0 left-0 w-full h-6 bg-gradient-to-t from-background to-transparent pointer-events-none" />
+                            )}
+                          </div>
+                          {message.content.length > 150 && (
                             <button className="text-xs text-primary mt-1" onClick={() => toggleExpanded(message.id)}>
-                              Read more
-                            </button>
-                          )}
-                          {expandedMessages.has(message.id) && (
-                            <button className="text-xs text-primary mt-1" onClick={() => toggleExpanded(message.id)}>
-                              Show less
+                              {expandedMessages.has(message.id) ? 'Show less' : 'Read more'}
                             </button>
                           )}
                         </>
@@ -372,7 +393,7 @@ export function ChatInterface() {
                           {message.content}
                         </p>
                       )}
-                      <div className="flex justify-end gap-1 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="flex justify-end gap-1 mt-2 opacity-0 group-hover:opacity-150 transition-opacity">
                         <Button
                           variant="ghost"
                           size="icon"
@@ -400,6 +421,36 @@ export function ChatInterface() {
                           </>
                         ) : null}
                       </div>
+                      {(message.files && message.files.length > 0) || message.file_url ? (
+                        <div className="flex flex-wrap gap-2 mt-2">
+                          {message.files?.map((file, i) => (
+                            <div key={i} className="flex items-center gap-2 bg-muted p-2 rounded-md">
+                              {file.type.startsWith('image/') ? (
+                                <img src={URL.createObjectURL(file)} alt={file.name} className="h-8 w-8 object-cover rounded" />
+                              ) : (
+                                <div className="h-8 w-8 bg-primary/10 rounded flex items-center justify-center">
+                                  <Paperclip className="h-4 w-4 text-primary" />
+                                </div>
+                              )}
+                              <span className="text-sm truncate max-w-[150px]">{file.name}</span>
+                            </div>
+                          ))}
+                          {!message.files && message.file_url && (
+                            <div className="flex items-center gap-2 bg-muted p-2 rounded-md">
+                              {message.file_type?.startsWith('image/') ? (
+                                <img src={message.file_url} alt={message.file_name} className="h-8 w-8 object-cover rounded" />
+                              ) : (
+                                <div className="h-8 w-8 bg-primary/10 rounded flex items-center justify-center">
+                                  <Paperclip className="h-4 w-4 text-primary" />
+                                </div>
+                              )}
+                              <a href={message.file_url} target="_blank" rel="noopener noreferrer" className="text-sm truncate max-w-[150px]">
+                                {message.file_name}
+                              </a>
+                            </div>
+                          )}
+                        </div>
+                      ) : null}
                     </>
                   )}
                 </div>

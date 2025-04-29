@@ -47,7 +47,7 @@ export function ChatInput({
 
   const resetTextareaHeight = () => {
     if (textareaRef.current) {
-      textareaRef.current.style.height = '44px'; // Reset to min-height
+      textareaRef.current.style.height = '48px'; // Reset to 2-line height
     }
   };
 
@@ -57,7 +57,7 @@ export function ChatInput({
 
     try {
       await onSubmit(input, files.length > 0 ? files : undefined);
-      setInput("");
+      setInput(""); // clear input after send
       setFiles([]);
       resetTextareaHeight(); // Reset height after submission
     } catch (error) {
@@ -69,7 +69,7 @@ export function ChatInput({
     setInput(e.target.value);
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
-      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 5 * 24)}px`;
+      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 6 * 24)}px`;
     }
   };
 
@@ -176,7 +176,7 @@ export function ChatInput({
             onPaste={handlePaste}
             placeholder={getPlaceholder()}
             className={cn(
-              "resize-none py-2 px-3 min-h-[44px] max-h-[120px] text-base border-0 focus-visible:ring-0 focus-visible:ring-offset-0",
+              "resize-none py-2 px-3 min-h-[48px] max-h-[192px] text-base border-0 focus-visible:ring-0 focus-visible:ring-offset-0",
               "scrollbar-thumb-rounded scrollbar-track-rounded",
               "scrollbar-thin scrollbar-thumb-border",
               isProcessing && "animate-pulse bg-muted/50"
@@ -187,7 +187,7 @@ export function ChatInput({
                 handleSubmit(e);
               }
             }}
-            disabled={disabled || isProcessing}
+            disabled={disabled}
             rows={1}
           />
 
@@ -198,7 +198,7 @@ export function ChatInput({
                 variant="ghost"
                 size="icon"
                 onClick={() => setMode('agentic')}
-                disabled={disabled || isProcessing}
+                disabled={disabled}
                 className={cn(
                   'h-9 w-9 rounded-xl',
                   mode === 'agentic' ? 'bg-black text-white' : 'text-black'
@@ -212,7 +212,7 @@ export function ChatInput({
                 variant="ghost"
                 size="icon"
                 onClick={() => setMode('research')}
-                disabled={disabled || isProcessing}
+                disabled={disabled}
                 className={cn(
                   'h-9 w-9 rounded-xl',
                   mode === 'research' ? 'bg-black text-white' : 'text-black'
@@ -226,7 +226,7 @@ export function ChatInput({
                 variant="ghost"
                 size="icon"
                 onClick={() => fileInputRef.current?.click()}
-                disabled={disabled || isProcessing || isUploading || files.length >= 5}
+                disabled={disabled || isUploading || files.length >= 5}
                 className="h-9 w-9 text-black"
                 title={files.length >= 5 ? 'Maximum files reached' : 'Attach files'}
               >
@@ -238,7 +238,7 @@ export function ChatInput({
               variant="ghost"
               size="icon"
               className={cn('h-9 w-9 rounded-xl text-black', isProcessing && 'animate-pulse')}
-              disabled={(!input.trim() && files.length === 0) || disabled || isProcessing}
+              disabled={(!input.trim() && files.length === 0) || disabled}
             >
               {isProcessing ? (
                 <Loader2 className="h-5 w-5 animate-spin text-black" />
