@@ -67,9 +67,17 @@ class WebSocketChatClient {
       throw new Error('WebSocket not connected');
     }
 
+    // Debug log for quote data
+    if (quote) {
+      console.log('WebSocketChatClient: Sending message with quote:', quote);
+    }
+    
+    const payload = { content, fileUrl, quote };
+    console.log('WebSocketChatClient: Sending payload:', payload);
+
     return new Promise((resolve, reject) => {
       this.messageQueue.push({ resolve, reject });
-      this.ws?.send(JSON.stringify({ content, fileUrl, quote }));
+      this.ws?.send(JSON.stringify(payload));
     });
   }
 }

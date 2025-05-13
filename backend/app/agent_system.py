@@ -322,13 +322,14 @@ def create_agent_graph() -> StateGraph:
 # Create the agent graph
 agent_graph = create_agent_graph()
 
-async def process_agent_message(thread_id: str, user_message: str) -> Tuple[str, List[str]]:
+async def process_agent_message(thread_id: str, user_message: str, quote_text: str = None) -> Tuple[str, List[str]]:
     """
     Process a user message through the agent graph.
     
     Args:
         thread_id: The conversation thread ID
         user_message: The user's message
+        quote_text: Optional text quoted by the user
         
     Returns:
         Tuple of (assistant_response, thinking_steps)
@@ -342,8 +343,15 @@ async def process_agent_message(thread_id: str, user_message: str) -> Tuple[str,
     
     try:
         # Create initial state with LangChain message object
+        message_content = user_message
+        
+        # If there's quoted text, include it in the message
+        if quote_text:
+            message_content = f"User message: {user_message}\n\nQuoted text: {quote_text}"
+            logger.info(f"Processing message with quote for thread {thread_id}")
+            
         initial_state = {
-            "messages": [HumanMessage(content=user_message)],
+            "messages": [HumanMessage(content=message_content)],
             "thread_id": thread_id,
             "context": None,
             "tool_results": None

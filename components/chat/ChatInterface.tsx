@@ -205,6 +205,11 @@ export function ChatInterface() {
         
         setMessages(prev => [...prev, tempMessage]);
 
+        // Log quote data for debugging
+        if (quoteData?.content) {
+          console.log('Sending message with quote:', quoteData.content);
+        }
+        
         // Start streaming response
         const response = await sendChatMessage(
           content, 

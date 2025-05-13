@@ -94,10 +94,19 @@ async def chat_endpoint(websocket: WebSocket, thread_id: str = None):
             data = json.loads(message)
             logger.info(f"Thread {thread_id}: Received message: {data.get('content','')}")
             content = data.get("content", "").strip()
+            file_url = data.get("fileUrl", "")
+            quote = data.get("quote", "")
+            
+            # Debug log the entire message data
+            logger.info(f"Thread {thread_id}: Full message data: {data}")
             
             if not content:
                 continue
-
+                
+            # Log if quote is present
+            if quote:
+                logger.info(f"Thread {thread_id}: Received quote: {quote[:50]}...")
+            
             # Store user message
             await chat_manager.store_message(thread_id, "user", content)
             logger.info(f"Thread {thread_id}: Stored user message: {content}")
@@ -116,7 +125,7 @@ async def chat_endpoint(websocket: WebSocket, thread_id: str = None):
                 await asyncio.sleep(0.3)  # Short delay for UX
             
             # Process message through LangGraph agent
-            response, updated_thinking_steps = await process_agent_message(thread_id, content)
+            response, updated_thinking_steps = await process_agent_message(thread_id, content, quote)
             
             # Update thinking steps if provided
             if updated_thinking_steps and len(updated_thinking_steps) > 0:
