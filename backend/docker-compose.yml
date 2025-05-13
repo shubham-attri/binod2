@@ -6,17 +6,17 @@ services:
     environment:
       - DEV_SERVER_URL=http://localhost:3000
       - REDIS_URL=redis://redis:6379
-      - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY}
-      - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY}
-      - LANGFUSE_HOST=http://langfuse:3000
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - SUPABASE_URL=${SUPABASE_URL}
       - SUPABASE_KEY=${SUPABASE_KEY}
-
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - MODEL=${MODEL}
+      - OPENROUTER_ENDPOINT=${OPENROUTER_ENDPOINT}
+      - COMPOSE_BAKE=true
+      
     restart: unless-stopped
     depends_on:
       - redis
-      - langfuse
     networks:
       - binod-network
 
@@ -32,59 +32,11 @@ services:
     networks:
       - binod-network
 
-  langfuse:
-    image: langfuse/langfuse:latest
-    ports:
-      - "3001:3000"
-    environment:
-      DATABASE_URL: "postgresql://langfuse:password@postgres:5432/langfuse"
-      NEXTAUTH_SECRET: ${LANGFUSE_NEXTAUTH_SECRET:-randomsecret}
-      CLICKHOUSE_URL: "http://clickhouse:8123"
-      CLICKHOUSE_MIGRATION_URL: "clickhouse://clickhouse:9000"
-      CLICKHOUSE_USER: "default"
-      CLICKHOUSE_PASSWORD: ""
-      SALT: ${LANGFUSE_SALT:-randomsalt}
-      NEXTAUTH_URL: "http://localhost:3001"
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
-      REDIS_AUTH: mypassword
-      ENCRYPTION_KEY: ${LANGFUSE_ENCRYPTION_KEY}
-    depends_on:
-      - postgres
-      - clickhouse
-    networks:
-      - binod-network
 
-  postgres:
-    image: postgres:15-alpine
-    environment:
-      POSTGRES_DB: "langfuse"
-      POSTGRES_USER: "langfuse"
-      POSTGRES_PASSWORD: "password"
-    volumes:
-      - pg-data:/var/lib/postgresql/data
-    networks:
-      - binod-network
-
-  clickhouse:
-    image: clickhouse/clickhouse-server:23.8
-    environment:
-      CLICKHOUSE_DB: "langfuse"
-      CLICKHOUSE_USER: "default"
-      CLICKHOUSE_PASSWORD: ""
-    ports:
-      - "8123:8123"
-      - "9000:9000"
-    volumes:
-      - clickhouse-data:/var/lib/clickhouse
-    networks:
-      - binod-network
 
 networks:
   binod-network:
     driver: bridge
 
 volumes:
-  redis-data:
-  pg-data:
-  clickhouse-data: 
+  redis-data: 
