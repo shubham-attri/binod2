@@ -13,7 +13,6 @@ from .websocket_chat import chat_endpoint
 from .vector_indexer import indexer
 import os, tempfile
 from pathlib import Path
-from supabase import create_client, Client 
 from langchain_community.document_loaders import PyPDFLoader, TextLoader, Docx2txtLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from dotenv import load_dotenv
