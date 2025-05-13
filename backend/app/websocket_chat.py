@@ -1,6 +1,8 @@
 from fastapi import WebSocket, WebSocketDisconnect
 from redisvl.extensions.session_manager import SemanticSessionManager
 from redis import Redis
+from .llm_client import llm_client
+from .vector_indexer import indexer
 
 import json
 import uuid
@@ -58,7 +60,7 @@ class ChatManager:
             messages = self.session_manager.get_recent(top_k=10)
             return messages
         except Exception as e:
-            print(f"Error getting chat history: {e}")
+            logger.error(f"Error getting chat history: {e}")
             return []
 
     async def store_message(self, thread_id: str, role: str, content: str):
@@ -70,7 +72,7 @@ class ChatManager:
                 "timestamp": datetime.utcnow().isoformat()
             })
         except Exception as e:
-            print(f"Error storing message: {e}")
+            logger.error(f"Error storing message: {e}")
 
 chat_manager = ChatManager()
 
@@ -101,21 +103,44 @@ async def chat_endpoint(websocket: WebSocket, thread_id: str = None):
             await chat_manager.store_message(thread_id, "user", content)
             logger.info(f"Thread {thread_id}: Stored user message: {content}")
             
-            # Simulate thinking steps
+            # Real thinking steps
             thinking_steps = [
                 "Analyzing your message...",
-                "Processing the request...",
-                "Generating response..."
+                "Searching for relevant information...",
+                "Generating response with OpenRouter LLM..."
             ]
             
             for step in thinking_steps:
                 await chat_manager.send_thinking_step(websocket, step)
                 logger.info(f"Thread {thread_id}: Sent thinking step: {step}")
-                await asyncio.sleep(0.5)  # Simulate processing time
+                await asyncio.sleep(0.5)  # Short delay for UX
             
-            # Generate dummy response
-            response = f"This is a dummy response to: {content}"
-            logger.info(f"Thread {thread_id}: Generated response: {response}")
+            # Get chat history for context
+            chat_history = await chat_manager.get_chat_history(thread_id)
+            formatted_messages = llm_client.format_messages(chat_history)
+            
+            # Try to get relevant context from vector store
+            context = None
+            try:
+                search_results = indexer.search(thread_id, content, top_k=3)
+                if search_results and len(search_results) > 0:
+                    context = "\n\n".join([result.get("text", "") for result in search_results])
+                    logger.info(f"Thread {thread_id}: Found {len(search_results)} relevant context chunks")
+            except Exception as e:
+                logger.error(f"Error searching vector store: {e}")
+            
+            # Generate response from LLM
+            try:
+                llm_response = await llm_client.generate_response(
+                    messages=formatted_messages,
+                    temperature=0.7,
+                    context=context
+                )
+                response = llm_client.extract_response_content(llm_response)
+                logger.info(f"Thread {thread_id}: Generated LLM response")
+            except Exception as e:
+                logger.error(f"Error generating LLM response: {e}")
+                response = "I apologize, but I encountered an error processing your request. Please try again later."
             
             # Store assistant response
             await chat_manager.store_message(thread_id, "assistant", response)
@@ -127,8 +152,13 @@ async def chat_endpoint(websocket: WebSocket, thread_id: str = None):
             
     except WebSocketDisconnect:
         chat_manager.disconnect(thread_id)
+        logger.info(f"Thread {thread_id}: WebSocket disconnected")
     except Exception as e:
-        await websocket.send_json({
-            "type": "error",
-            "content": str(e)
-        }) 
+        logger.error(f"Thread {thread_id}: Error in chat endpoint: {str(e)}")
+        try:
+            await websocket.send_json({
+                "type": "error",
+                "content": str(e)
+            })
+        except:
+            logger.error(f"Thread {thread_id}: Could not send error message to client") 

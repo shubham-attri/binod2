@@ -81,6 +81,58 @@ class DocumentVectorIndexer:
             self.redis.hset(key, mapping={"content": chunk, "embedding": emb})
         logger.info(f"Successfully ingested {len(chunks)} chunks for project_id={project_id}")
         return len(chunks)
+        
+    def search(self, project_id: str, query: str, top_k: int = 3) -> List[dict]:
+        """
+        Search for relevant text chunks based on semantic similarity to the query.
+        
+        Args:
+            project_id: The project/conversation ID to search within
+            query: The search query text
+            top_k: Number of results to return
+            
+        Returns:
+            List of dictionaries with text content and score
+        """
+        logger.info(f"Searching for query in project_id={project_id}")
+        index_name = f"rag:{project_id}"
+        
+        try:
+            # Check if index exists
+            self.redis.ft(index_name).info()
+        except Exception as e:
+            logger.warning(f"Index {index_name} does not exist: {e}")
+            return []
+            
+        try:
+            # Embed the query
+            query_embedding = self.vectorizer.embed(query, as_buffer=True)
+            
+            # Perform vector search
+            query_string = f"*=>[KNN {top_k} @embedding $query_vector AS score]"
+            query_params = {"query_vector": query_embedding}
+            
+            # Execute search
+            results = self.redis.ft(index_name).search(
+                query_string,
+                query_params=query_params
+            ).docs
+            
+            # Format results
+            formatted_results = []
+            for doc in results:
+                formatted_results.append({
+                    "text": doc.content.decode('utf-8') if isinstance(doc.content, bytes) else doc.content,
+                    "score": float(doc.score) if hasattr(doc, 'score') else 1.0,
+                    "id": doc.id
+                })
+                
+            logger.info(f"Found {len(formatted_results)} results for query in project_id={project_id}")
+            return formatted_results
+            
+        except Exception as e:
+            logger.error(f"Error searching index {index_name}: {e}")
+            return []
 
 
 # Global indexer instance
