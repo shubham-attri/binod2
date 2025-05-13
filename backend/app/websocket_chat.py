@@ -1,22 +1,15 @@
 from fastapi import WebSocket, WebSocketDisconnect
 from redisvl.extensions.session_manager import SemanticSessionManager
-from redis import Redis
 from .agent_system import process_agent_message, create_conversation_thread
+from .shared_resources import redis_client
 
 import json
-import uuid
 from datetime import datetime
 import asyncio
 import logging
 
 logger = logging.getLogger(__name__)
 
-# Initialize Redis client
-redis_client = Redis(
-    host='redis',  # Docker service name
-    port=6379,
-    decode_responses=True
-)
 
 class ChatManager:
     def __init__(self):

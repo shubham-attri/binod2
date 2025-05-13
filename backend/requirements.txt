@@ -13,12 +13,15 @@ loguru
 redisvl
 litellm
 huggingface_hub[hf_xet]
+redis
 
 # Document ingestion dependencies
 langchain
+langchain-core
+langchain-openai
+langchain-community
 pypdf2
 python-docx
-langchain-community
 python-multipart
 pypdf
 

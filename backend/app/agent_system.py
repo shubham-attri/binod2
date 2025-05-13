@@ -75,12 +75,13 @@ def search_documents(query: str, thread_id: str) -> str:
 # Create a list of tools
 tools = [search_documents]
 
-# Create a wrapper for our OpenRouter LLM client to make it compatible with LangGraph
-class OpenRouterLLMWrapper:
-    """Wrapper for OpenRouter LLM to make it compatible with LangGraph."""
+# Create a wrapper for our LangChain LLM to make it compatible with LangGraph
+class LangChainLLMWrapper:
+    """Wrapper for LangChain LLM to make it compatible with LangGraph."""
     
     def __init__(self):
         """Initialize the wrapper."""
+        # Use the LangChain-compatible ChatOpenRouter
         self.client = llm_client
     
     async def ainvoke(self, messages, **kwargs) -> Dict[str, Any]:
@@ -95,35 +96,26 @@ class OpenRouterLLMWrapper:
             LLM response
         """
         try:
-            # Convert LangChain message objects to dictionaries
-            formatted_messages = []
-            for message in messages:
-                if hasattr(message, 'type') and hasattr(message, 'content'):
-                    # Handle LangChain message objects
-                    role = "user" if message.type == "human" else "assistant" if message.type == "ai" else "system"
-                    formatted_messages.append({"role": role, "content": message.content})
-                elif isinstance(message, dict) and "role" in message and "content" in message:
-                    # Handle dictionary messages
-                    formatted_messages.append(message)
-            
-            # Get context if provided
+            # LangChain model already accepts LangChain message objects
+            # Get context if provided and add as system message if needed
             context = kwargs.get("context")
+            if context and not any(isinstance(m, SystemMessage) for m in messages):
+                # Add context as system message
+                system_message = SystemMessage(content=f"You are a helpful AI assistant. Use the following context to help answer the user's question: {context}")
+                messages = [system_message] + list(messages)
             
-            # Call the LLM
-            response = await self.client.generate_response(
-                messages=formatted_messages,
+            # Call the LLM - LangChain handles caching automatically
+            response = await self.client.ainvoke(
+                messages,
                 temperature=kwargs.get("temperature", 0.7),
-                max_tokens=kwargs.get("max_tokens", 1000),
-                context=context
+                max_tokens=kwargs.get("max_tokens", 1000)
             )
             
-            # Extract and format the response
-            content = self.client.extract_response_content(response)
-            
-            # Return a LangChain AIMessage
-            return {"message": AIMessage(content=content)}
+            # Return the response
+            return {"message": response}
         except Exception as e:
             logger.error(f"Error invoking LLM: {e}")
+            logger.exception("Detailed error in ainvoke:")
             return {"message": AIMessage(content="I encountered an error processing your request.")}
     
     def invoke(self, messages, **kwargs) -> Dict[str, Any]:
@@ -137,26 +129,32 @@ class OpenRouterLLMWrapper:
         Returns:
             LLM response
         """
-        import asyncio
-        import nest_asyncio
-        
-        # Apply nest_asyncio to allow running asyncio within an existing event loop
-        nest_asyncio.apply()
-        
-        # Create a new event loop for this invocation
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        
         try:
-            # Run the async function in the new event loop
-            result = loop.run_until_complete(self.ainvoke(messages, **kwargs))
-            return result
-        finally:
-            # Clean up the event loop
-            loop.close()
+            # Get context if provided and add as system message if needed
+            context = kwargs.get("context")
+            if context and not any(isinstance(m, SystemMessage) for m in messages):
+                # Add context as system message
+                system_message = SystemMessage(content=f"You are a helpful AI assistant. Use the following context to help answer the user's question: {context}")
+                messages = [system_message] + list(messages)
+            
+            # Call the LLM directly - LangChain handles caching automatically
+            # This is more efficient than using asyncio for synchronous calls
+            response = self.client.invoke(
+                messages,
+                temperature=kwargs.get("temperature", 0.7),
+                max_tokens=kwargs.get("max_tokens", 1000),
+                stream=True
+            )
+            
+            # Return the response
+            return {"message": response}
+        except Exception as e:
+            logger.error(f"Error invoking LLM: {e}")
+            logger.exception("Detailed error in invoke:")
+            return {"message": AIMessage(content="I encountered an error processing your request.")}
 
 # Initialize the LLM wrapper
-llm = OpenRouterLLMWrapper()
+llm = LangChainLLMWrapper()
 
 # Define the agent nodes
 def retrieve_context(state: AgentState) -> AgentState:

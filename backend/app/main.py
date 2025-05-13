@@ -1,3 +1,11 @@
+"""
+Main application file for the Binod AI Assistant backend.
+
+This module sets up the FastAPI application, including routes for chat,
+file ingestion, and document upload. It also configures CORS and initializes
+the necessary components for the application to run.
+"""
+
 from fastapi import FastAPI, WebSocket, Request, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 import logging
@@ -11,6 +19,7 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 from dotenv import load_dotenv
 from storage3.exceptions import StorageApiError
 from typing import List
+from .shared_resources import supabase
 
 # Load environment variables from .env file
 load_dotenv()
@@ -22,10 +31,6 @@ logger = logging.getLogger(__name__)
 # Initialize FastAPI app
 app = FastAPI()
 
-# Initialize Supabase client
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY")
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # Configure CORS for frontend access
 app.add_middleware(
