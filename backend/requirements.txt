@@ -22,5 +22,11 @@ langchain-community
 python-multipart
 pypdf
 
+# LangGraph dependencies
+langgraph>=0.0.26
+langsmith
+typing-extensions
+nest_asyncio
+
 # Supabase client for storage
 supabase
