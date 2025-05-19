@@ -1,7 +1,7 @@
 from fastapi import WebSocket, WebSocketDisconnect
 from redisvl.extensions.session_manager import SemanticSessionManager
-from .agent_system import process_agent_message, create_conversation_thread
-from .shared_resources import redis_client
+from app.agent_system import process_message, create_conversation_thread
+from app.shared_resources import redis_client
 
 import json
 from datetime import datetime
@@ -34,17 +34,23 @@ class ChatManager:
             del self.active_connections[thread_id]
 
     async def send_thinking_step(self, websocket: WebSocket, step: str):
-        await websocket.send_json({
+        """Send a thinking step to the client"""
+        message = {
             "type": "thinking_step",
             "content": step
-        })
+        }
+        await websocket.send_json(message)
+        logger.info(f"Sent thinking step: {step}")
 
     async def send_response(self, websocket: WebSocket, content: str, thinking_steps: list[str]):
-        await websocket.send_json({
+        """Send the final response to the client"""
+        message = {
             "type": "response",
             "content": content,
             "thinking_steps": thinking_steps
-        })
+        }
+        await websocket.send_json(message)
+        logger.info(f"Sent response: {content[:50]}...")
 
     async def get_chat_history(self, thread_id: str):
         try:
@@ -117,20 +123,29 @@ async def chat_endpoint(websocket: WebSocket, thread_id: str = None):
                 logger.info(f"Thread {thread_id}: Sent thinking step: {step}")
                 await asyncio.sleep(0.3)  # Short delay for UX
             
-            # Process message through LangGraph agent
-            response, updated_thinking_steps = await process_agent_message(thread_id, content, quote)
-            
-            # Update thinking steps if provided
-            if updated_thinking_steps and len(updated_thinking_steps) > 0:
-                thinking_steps = updated_thinking_steps
-                logger.info(f"Thread {thread_id}: Updated thinking steps from agent")
-            
-            # Store assistant response
-            await chat_manager.store_message(thread_id, "assistant", response)
-            logger.info(f"Thread {thread_id}: Stored assistant response")
-            
-            # Send final response
-            await chat_manager.send_response(websocket, response, thinking_steps)
+            try:
+                # Process message through LangGraph agent
+                response, updated_thinking_steps = await process_message(thread_id, content, quote)
+                
+                # Update thinking steps if provided
+                if updated_thinking_steps and len(updated_thinking_steps) > 0:
+                    thinking_steps = updated_thinking_steps
+                    logger.info(f"Thread {thread_id}: Updated thinking steps from agent")
+                
+                # Store assistant response
+                await chat_manager.store_message(thread_id, "assistant", response)
+                logger.info(f"Thread {thread_id}: Stored assistant response")
+                
+                # Send final response
+                await chat_manager.send_response(websocket, response, thinking_steps)
+                
+            except Exception as e:
+                error_msg = f"Error processing message: {str(e)}"
+                logger.error(f"Thread {thread_id}: {error_msg}")
+                await websocket.send_json({
+                    "type": "error",
+                    "content": error_msg
+                })
             logger.info(f"Thread {thread_id}: Sent final response")
             
     except WebSocketDisconnect:

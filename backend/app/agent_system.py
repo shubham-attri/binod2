@@ -1,399 +1,152 @@
 """
-LangGraph Agent System for Binod AI Assistant.
-
-This module implements a LangGraph-based agent that integrates with the OpenRouter LLM
-and provides a structured approach to handling conversations and tool usage.
+Simplified Agent System using LangGraph
 """
-
-import os
+from typing import List, Dict, Any, Optional
 import logging
-import uuid
-from typing import Annotated, Dict, List, Any, Optional, TypedDict, Tuple
-from typing_extensions import TypedDict
-
-from langchain.chat_models import ChatOpenAI
-from langchain.schema import AIMessage, HumanMessage, SystemMessage, BaseMessage
-from langchain.tools import BaseTool, StructuredTool, tool
-from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
-
-from langgraph.graph import StateGraph, START
-from langgraph.graph.message import add_messages
-
-from .llm_client import llm_client
-from .vector_indexer import indexer
+from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
+from langgraph.graph import StateGraph, END
+from app.llm_client import llm
+from app.vector_indexer import vector_indexer
 
 # Configure logging
 logger = logging.getLogger(__name__)
 
-# Custom message types for our agent
-class Message(TypedDict):
-    role: str  # "user", "assistant", "system", "tool"
-    content: str
-    name: Optional[str]  # Used for tool calls
+class AgentState(dict):
+    """State for our agent workflow"""
+    messages: List[Dict[str, str]]
+    context: Optional[str] = ""
 
-# State definition for our agent
-class AgentState(TypedDict):
-    # Messages have the type "list". The `add_messages` function
-    # in the annotation defines how this state key should be updated
-    # (it appends messages to the list, rather than overwriting them)
-    messages: Annotated[List[Message], add_messages]
-    # Current thread/conversation ID
-    thread_id: str
-    # Optional context from vector search
-    context: Optional[str]
-    # Tool results when tools are called
-    tool_results: Optional[Dict[str, Any]]
-
-# Define tools that our agent can use
-@tool
-def search_documents(query: str, thread_id: str) -> str:
-    """
-    Search for relevant documents based on the query.
-    
-    Args:
-        query: The search query
-        thread_id: The conversation thread ID
-        
-    Returns:
-        Relevant information from documents
-    """
-    try:
-        results = indexer.search(thread_id, query, top_k=3)
-        if not results or len(results) == 0:
-            return "No relevant documents found."
-        
-        # Format results
-        formatted_results = []
-        for i, result in enumerate(results, 1):
-            formatted_results.append(f"Document {i}:\n{result.get('text', '')}")
-        
-        return "\n\n".join(formatted_results)
-    except Exception as e:
-        logger.error(f"Error searching documents: {e}")
-        return f"Error searching documents: {str(e)}"
-
-# Create a list of tools
-tools = [search_documents]
-
-# Create a wrapper for our LangChain LLM to make it compatible with LangGraph
-class LangChainLLMWrapper:
-    """Wrapper for LangChain LLM to make it compatible with LangGraph."""
-    
-    def __init__(self):
-        """Initialize the wrapper."""
-        # Use the LangChain-compatible ChatOpenRouter
-        self.client = llm_client
-    
-    async def ainvoke(self, messages, **kwargs) -> Dict[str, Any]:
-        """
-        Asynchronously invoke the LLM.
-        
-        Args:
-            messages: List of LangChain message objects
-            **kwargs: Additional arguments to pass to the LLM
-            
-        Returns:
-            LLM response
-        """
-        try:
-            # LangChain model already accepts LangChain message objects
-            # Get context if provided and add as system message if needed
-            context = kwargs.get("context")
-            if context and not any(isinstance(m, SystemMessage) for m in messages):
-                # Add context as system message
-                system_message = SystemMessage(content=f"You are a helpful AI assistant. Use the following context to help answer the user's question: {context}")
-                messages = [system_message] + list(messages)
-            
-            # Call the LLM - LangChain handles caching automatically
-            response = await self.client.ainvoke(
-                messages,
-                temperature=kwargs.get("temperature", 0.7),
-                max_tokens=kwargs.get("max_tokens", 1000)
-            )
-            
-            # Return the response
-            return {"message": response}
-        except Exception as e:
-            logger.error(f"Error invoking LLM: {e}")
-            logger.exception("Detailed error in ainvoke:")
-            return {"message": AIMessage(content="I encountered an error processing your request.")}
-    
-    def invoke(self, messages, **kwargs) -> Dict[str, Any]:
-        """
-        Synchronously invoke the LLM (wrapper for async implementation).
-        
-        Args:
-            messages: List of LangChain message objects
-            **kwargs: Additional arguments to pass to the LLM
-            
-        Returns:
-            LLM response
-        """
-        try:
-            # Get context if provided and add as system message if needed
-            context = kwargs.get("context")
-            if context and not any(isinstance(m, SystemMessage) for m in messages):
-                # Add context as system message
-                system_message = SystemMessage(content=f"You are a helpful AI assistant. Use the following context to help answer the user's question: {context}")
-                messages = [system_message] + list(messages)
-            
-            # Call the LLM directly - LangChain handles caching automatically
-            # This is more efficient than using asyncio for synchronous calls
-            response = self.client.invoke(
-                messages,
-                temperature=kwargs.get("temperature", 0.7),
-                max_tokens=kwargs.get("max_tokens", 1000),
-                stream=True
-            )
-            
-            # Return the response
-            return {"message": response}
-        except Exception as e:
-            logger.error(f"Error invoking LLM: {e}")
-            logger.exception("Detailed error in invoke:")
-            return {"message": AIMessage(content="I encountered an error processing your request.")}
-
-# Initialize the LLM wrapper
-llm = LangChainLLMWrapper()
-
-# Define the agent nodes
 def retrieve_context(state: AgentState) -> AgentState:
-    """
-    Retrieve relevant context from the vector store.
-    
-    Args:
-        state: Current agent state
+    """Retrieve relevant context using RAG"""
+    if not state["messages"]:
+        return state
         
-    Returns:
-        Updated agent state with context
-    """
+    last_message = state["messages"][-1]["content"]
+    # Get relevant chunks from Redis vector store
     try:
-        # Get thread ID from state
-        thread_id = state["thread_id"]
-        
-        # Extract user query from the most recent user message
-        user_query = ""
-        messages = state.get("messages", [])
-        
-        # Debug logging
-        logger.info(f"Messages in state: {len(messages)} messages")
-        for i, msg in enumerate(messages):
-            logger.info(f"Message {i} type: {type(msg)}")
-        
-        # Try to find the latest user message
-        for message in reversed(messages):
-            # Case 1: LangChain HumanMessage object
-            if isinstance(message, HumanMessage):
-                user_query = message.content
-                logger.info(f"Found HumanMessage with content: {user_query[:50]}...")
-                break
-            # Case 2: Dictionary with role and content
-            elif isinstance(message, dict) and "role" in message and "content" in message:
-                if message["role"] == "user":
-                    user_query = message["content"]
-                    logger.info(f"Found dict message with user role: {user_query[:50]}...")
-                    break
-            # Case 3: Other LangChain message types
-            elif hasattr(message, "type") and hasattr(message, "content"):
-                if message.type == "human":
-                    user_query = message.content
-                    logger.info(f"Found message with human type: {user_query[:50]}...")
-                    break
-            # Log unrecognized message format
-            else:
-                logger.warning(f"Unrecognized message format: {type(message)}")
-        
-        # If no user query found, return empty context
-        if not user_query:
-            logger.warning("No user query found in messages")
-            return {"context": None}
-        
-        # Search for relevant documents
-        logger.info(f"Searching for context with query: {user_query[:50]}...")
-        results = indexer.search(thread_id, user_query, top_k=3)
-        
-        if results and len(results) > 0:
-            # Format context from results
-            context_parts = []
-            for i, result in enumerate(results, 1):
-                context_parts.append(f"Document {i}:\n{result.get('text', '')}")
-            
-            context = "\n\n".join(context_parts)
-            logger.info(f"Retrieved context for thread {thread_id}: {len(context)} chars")
-            return {"context": context}
-        else:
-            logger.info(f"No relevant context found for thread {thread_id}")
-            return {"context": None}
+        chunks = vector_indexer.search_similar_chunks(
+            query=last_message,
+            project_id="default",
+            top_k=3
+        )
+        return {**state, "context": "\n\n".join(chunks) if chunks else "No relevant context found"}
     except Exception as e:
         logger.error(f"Error retrieving context: {e}")
-        logger.exception("Detailed error in retrieve_context:")
-        return {"context": None}
+        return {**state, "context": "Error retrieving context"}
 
 def generate_response(state: AgentState) -> AgentState:
-    """
-    Generate a response using the LLM.
+    """Generate response using LLM with context"""
+    messages = state["messages"].copy()
     
-    Args:
-        state: Current agent state
-        
-    Returns:
-        Updated agent state with assistant response
-    """
-    # Convert dictionary messages to LangChain message objects
-    langchain_messages = []
-    context = state.get("context")
+    # Add system message with context
+    if state.get("context"):
+        system_msg = {
+            "role": "system",
+            "content": f"Use this context to answer the question:\n{state['context']}"
+        }
+        messages.insert(0, system_msg)
     
-    try:
-        # Add system message with context if available
-        if context:
-            system_content = (
-                "You are a helpful AI assistant. "
-                "Use the following context to help answer the user's question if relevant:\n\n"
-                f"{context}"
-            )
-            langchain_messages.append(SystemMessage(content=system_content))
-        
-        # Convert messages to LangChain format
-        for message in state["messages"]:
-            if isinstance(message, dict):
-                role = message.get("role", "")
-                content = message.get("content", "")
-                
-                if role == "user":
-                    langchain_messages.append(HumanMessage(content=content))
-                elif role == "assistant":
-                    langchain_messages.append(AIMessage(content=content))
-                elif role == "system":
-                    # Skip if we already added a system message with context
-                    if not context or not langchain_messages:
-                        langchain_messages.append(SystemMessage(content=content))
-            else:
-                # Message is already a LangChain message object
-                langchain_messages.append(message)
-        
-        # Log the messages we're sending to the LLM
-        logger.info(f"Sending {len(langchain_messages)} messages to LLM")
-        for i, msg in enumerate(langchain_messages):
-            if hasattr(msg, 'type') and hasattr(msg, 'content'):
-                logger.info(f"Message {i}: type={msg.type}, content={msg.content[:50]}...")
-        
-        # Generate response using the LLM wrapper
-        response = llm.invoke(langchain_messages, context=context)
-        
-        # Extract the assistant message from the response
-        if "message" in response:
-            assistant_message = response["message"]
-            logger.info(f"Got response from LLM: {type(assistant_message)}")
-            
-            # Return the assistant message
-            return {"messages": [assistant_message]}
-        else:
-            logger.error(f"Unexpected response format: {response}")
-            return {"messages": [AIMessage(content="I apologize, but I received an unexpected response format.")]}
-    except Exception as e:
-        logger.error(f"Error generating response: {e}")
-        logger.exception("Detailed error in generate_response:")
-        return {"messages": [AIMessage(content="I apologize, but I encountered an error processing your request.")]}
+    # Convert to LangChain messages
+    lc_messages = []
+    for msg in messages:
+        if msg["role"] == "user":
+            lc_messages.append(HumanMessage(content=msg["content"]))
+        elif msg["role"] == "assistant":
+            lc_messages.append(AIMessage(content=msg["content"]))
+        elif msg["role"] == "system":
+            lc_messages.append(SystemMessage(content=msg["content"]))
+    
+    # Get response from LLM
+    response = llm.invoke(lc_messages)
+    
+    return {
+        **state,
+        "messages": [*state["messages"], {"role": "assistant", "content": response.content}]
+    }
 
-# Define the agent graph
-def create_agent_graph() -> StateGraph:
-    """
-    Create the agent graph with nodes and edges.
-    
-    Returns:
-        Compiled agent graph
-    """
-    # Create the graph builder
-    graph_builder = StateGraph(AgentState)
+# Define the agent nodes
+def create_agent_workflow():
+    """Create and return a compiled agent workflow"""
+    workflow = StateGraph(AgentState)
     
     # Add nodes
-    graph_builder.add_node("retrieve_context", retrieve_context)
-    graph_builder.add_node("generate_response", generate_response)
+    workflow.add_node("retrieve", retrieve_context)
+    workflow.add_node("generate", generate_response)
     
-    # Add edges
-    graph_builder.add_edge(START, "retrieve_context")
-    graph_builder.add_edge("retrieve_context", "generate_response")
+    # Define edges
+    workflow.add_edge("retrieve", "generate")
+    workflow.add_edge("generate", END)
     
-    # Compile the graph
-    return graph_builder.compile()
+    # Set entry point
+    workflow.set_entry_point("retrieve")
+    
+    # Compile the workflow
+    return workflow.compile()
 
-# Create the agent graph
-agent_graph = create_agent_graph()
+# Global agent instance
+agent = create_agent_workflow()
 
-async def process_agent_message(thread_id: str, user_message: str, quote_text: str = None) -> Tuple[str, List[str]]:
+async def process_message(thread_id: str, content: str, quote: str = None) -> tuple[str, list]:
     """
-    Process a user message through the agent graph.
+    Process a message through the agent
     
     Args:
         thread_id: The conversation thread ID
-        user_message: The user's message
-        quote_text: Optional text quoted by the user
+        content: The message content
+        quote: Optional quoted text from the conversation
         
     Returns:
-        Tuple of (assistant_response, thinking_steps)
+        A tuple of (response_text, thinking_steps)
     """
-    # Initialize thinking steps
-    thinking_steps = [
-        "Processing your message...",
-        "Searching for relevant information...",
-        "Generating response..."
+    try:
+        # Get the conversation history
+        messages = [
+            {"role": "user", "content": content}
+        ]
+        
+        # Add quote to the message if provided
+        if quote:
+            messages[0]["content"] = f"{quote}\n\n{content}"
+        
+        # Initialize state with messages
+        state = {"messages": messages}
+        
+        # Run the agent
+        result = agent.invoke(state)
+        
+        # Get the assistant's response
+        assistant_response = result["messages"][-1]["content"]
+        
+        # Return response and empty thinking steps list (can be updated later)
+        return assistant_response, []
+        
+    except Exception as e:
+        logger.error(f"Error in process_message: {e}")
+        return "I encountered an error processing your message. Please try again.", []
+
+# Example usage
+if __name__ == "__main__":
+    # Initialize the vector index
+    vector_indexer.create_index("default")
+    
+    # Example conversation
+    messages = [
+        {"role": "user", "content": "What is RAG?"}
     ]
     
-    try:
-        # Create initial state with LangChain message object
-        message_content = user_message
-        
-        # If there's quoted text, include it in the message
-        if quote_text:
-            message_content = f"User message: {user_message}\n\nQuoted text: {quote_text}"
-            logger.info(f"Processing message with quote for thread {thread_id}")
-            
-        initial_state = {
-            "messages": [HumanMessage(content=message_content)],
-            "thread_id": thread_id,
-            "context": None,
-            "tool_results": None
-        }
-        
-        # Process through the graph
-        logger.info(f"Processing message for thread {thread_id}")
-        result = None
-        
-        # Stream through the graph to get intermediate results
-        for event in agent_graph.stream(initial_state):
-            # Track progress through nodes
-            if "retrieve_context" in event:
-                thinking_steps[1] = "Found relevant information in your documents"
-            if "generate_response" in event:
-                result = event["generate_response"]
-        
-        # Extract the assistant's response
-        if result and "messages" in result and result["messages"]:
-            message = result["messages"][-1]
-            # Handle both LangChain message objects and dictionaries
-            if isinstance(message, BaseMessage):
-                assistant_response = message.content
-            elif isinstance(message, dict) and "content" in message:
-                assistant_response = message["content"]
-            else:
-                logger.error(f"Unknown message format: {type(message)}")
-                assistant_response = "I apologize, but I couldn't generate a proper response."
-                
-            logger.info(f"Generated response for thread {thread_id}")
-            return assistant_response, thinking_steps
-        else:
-            logger.error(f"No response generated for thread {thread_id}")
-            return "I apologize, but I couldn't generate a response.", thinking_steps
-    except Exception as e:
-        logger.error(f"Error processing message: {e}")
-        return f"I encountered an error: {str(e)}", thinking_steps
+    # Process the message
+    response = process_message(messages)
+    print(f"Assistant: {response['content']}")
 
-# Function to create a new conversation thread
+import uuid
+
 def create_conversation_thread() -> str:
     """
     Create a new conversation thread.
     
     Returns:
-        Thread ID
+        Thread ID as a string
     """
-    return str(uuid.uuid4())
+    thread_id = str(uuid.uuid4())
+    logger.info(f"Created new conversation thread: {thread_id}")
+    return thread_id
