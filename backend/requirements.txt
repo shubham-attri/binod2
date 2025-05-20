@@ -1,26 +1,47 @@
+# Core dependencies
 fastapi
-uvicorn
 pydantic
+uvicorn
+
+# Redis dependencies
 redis
 redis-om
-sentence-transformers
+redisvl
+
+# AI dependencies
+sentence-transformers   
 langfuse
-websockets
-python-dotenv
+litellm
+huggingface_hub[hf_xet]
+torch
+transformers
+
+# Utility dependencies
 numpy
 tenacity
 loguru
-redisvl
-litellm
-huggingface_hub[hf_xet]
+python-dotenv
+
+# WebSockets dependency
+websockets
+
 
 # Document ingestion dependencies
 langchain
+langchain-core
+langchain-openai
+langchain-community
+langchain-huggingface
 pypdf2
 python-docx
-langchain-community
 python-multipart
 pypdf
+
+# LangGraph dependencies
+langgraph
+langsmith
+typing-extensions
+nest_asyncio
 
 # Supabase client for storage
 supabase

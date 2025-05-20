@@ -1,100 +1,86 @@
-from typing import List
+from typing import List, Optional, Dict, Any
+import logging
+import numpy as np
 from redis import Redis
 from redis.commands.search.field import VectorField, TextField
 from redis.commands.search.indexDefinition import IndexDefinition, IndexType
 from redisvl.utils.vectorize.text.huggingface import HFTextVectorizer
-import logging
+
+def chunk_text(text: str, chunk_size: int = 500) -> List[str]:
+    """Split text into chunks of approximately chunk_size characters."""
+    return [text[i:i + chunk_size] for i in range(0, len(text), chunk_size)]
 
 logger = logging.getLogger(__name__)
 
-"""
-We can select any vector embeddings model if we want to https://docs.redisvl.com/en/latest/api/query.html
-
-We can use text embeddings models from voyage ai, but is paid
-
-
-"""
-
-def chunk_text(text: str, chunk_size: int = 500) -> List[str]:
-    """
-    Split text into chunks of approximately chunk_size words.
-    """
-    words = text.split()
-    return [" ".join(words[i:i+chunk_size]) for i in range(0, len(words), chunk_size)]
-
-
 class DocumentVectorIndexer:
     """
-    Manages Redis vector index for projects and ingests text chunks.
+    Simplified Redis vector indexer with semantic search capabilities.
     """
-    def __init__(self,
-                 redis_host: str = 'redis',
-                 redis_port: int = 6379,
-                 model_name: str = "sentence-transformers/all-mpnet-base-v2"):
-        # decode_responses=False to preserve binary embeddings
+    
+    def __init__(
+        self,
+        redis_host: str = 'localhost',
+        redis_port: int = 6379,
+        model_name: str = "sentence-transformers/all-mpnet-base-v2"
+    ):
         self.redis = Redis(host=redis_host, port=redis_port, decode_responses=False)
         self.vectorizer = HFTextVectorizer(model=model_name)
-
-    def create_index(self, project_id: str, dim: int):
-        """
-        Create a RediSearch vector index for the given project if not exists.
-        """
+        self.embedding_dim = 768  # Default for all-mpnet-base-v2
+        
+    def create_index(self, project_id: str):
+        """Create a vector index for the project if it doesn't exist"""
         index_name = f"rag:{project_id}"
         prefix = f"{index_name}:"
+        
         try:
-            # Check if index already exists
             self.redis.ft(index_name).info()
             logger.info(f"Index {index_name} already exists")
+            return
         except Exception:
             logger.info(f"Creating new index {index_name}")
-            # Define schema: text + vector field
-            hparams = {"TYPE": "FLOAT32", "DIM": dim, "DISTANCE_METRIC": "COSINE"}
-            schema = (
-                TextField("content"),
-                VectorField("embedding", "FLAT", hparams)
-            )
-            definition = IndexDefinition(prefix=[prefix], index_type=IndexType.HASH)
-            self.redis.ft(index_name).create_index(schema, definition=definition)
-
-    def ingest(self,
-               project_id: str,
-               text: str,
-               chunk_size: int = 500,
-               batch_size: int = 10) -> int:
-        """
-        Chunk text, embed with HFTextVectorizer, and index into Redis VL.
-        Returns number of chunks ingested.
-        """
-        logger.info(f"Received ingestion request for project_id={project_id}")
-        chunks = chunk_text(text, chunk_size)
-        logger.info(f"Split text into {len(chunks)} chunks")
-        return self.ingest_chunks(project_id, chunks, batch_size)
-
-    def ingest_chunks(self, project_id: str, chunks: List[str], batch_size: int = 10) -> int:
-        """Embed and index pre-split text chunks."""
-        logger.info(f"Received ingestion for project_id={project_id}, chunks={len(chunks)}")
-        embeddings = self.vectorizer.embed_many(chunks, batch_size=batch_size, as_buffer=True)
-        dim = len(embeddings[0])
-        self.create_index(project_id, dim)
-        for i, (chunk, emb) in enumerate(zip(chunks, embeddings)):
-            key = f"rag:{project_id}:{i}"
-            self.redis.hset(key, mapping={"content": chunk, "embedding": emb})
-        logger.info(f"Successfully ingested {len(chunks)} chunks for project_id={project_id}")
-        return len(chunks)
-        
-    def search(self, project_id: str, query: str, top_k: int = 3) -> List[dict]:
-        """
-        Search for relevant text chunks based on semantic similarity to the query.
-        
-        Args:
-            project_id: The project/conversation ID to search within
-            query: The search query text
-            top_k: Number of results to return
             
-        Returns:
-            List of dictionaries with text content and score
-        """
-        logger.info(f"Searching for query in project_id={project_id}")
+        # Define schema
+        schema = (
+            TextField("id"),
+            TextField("text"),
+            VectorField(
+                "embedding",
+                "FLAT",
+                {
+                    "TYPE": "FLOAT32",
+                    "DIM": self.embedding_dim,
+                    "DISTANCE_METRIC": "COSINE"
+                }
+            )
+        )
+        
+        # Create index
+        definition = IndexDefinition(prefix=[prefix], index_type=IndexType.HASH)
+        self.redis.ft(index_name).create_index(fields=schema, definition=definition)
+        logger.info(f"Created index {index_name}")
+    
+    def add_document(self, project_id: str, text: str, doc_id: Optional[str] = None) -> str:
+        """Add a document to the vector store"""
+        if not doc_id:
+            doc_id = f"doc:{len(self.redis.keys(f'rag:{project_id}:*')) + 1}"
+            
+        # Generate embedding
+        embedding = self.vectorizer.embed(text)
+        
+        # Store in Redis
+        key = f"rag:{project_id}:{doc_id}"
+        self.redis.hset(
+            key,
+            mapping={
+                "id": doc_id,
+                "text": text,
+                "embedding": np.array(embedding).astype(np.float32).tobytes()
+            }
+        )
+        return key
+    
+    def search_similar_chunks(self, query: str, project_id: str, top_k: int = 3) -> List[str]:
+        """Search for similar text chunks using semantic search"""
         index_name = f"rag:{project_id}"
         
         try:
@@ -103,37 +89,42 @@ class DocumentVectorIndexer:
         except Exception as e:
             logger.warning(f"Index {index_name} does not exist: {e}")
             return []
-            
+        
         try:
-            # Embed the query
-            query_embedding = self.vectorizer.embed(query, as_buffer=True)
+            # Generate query embedding
+            query_embedding = self.vectorizer.embed(query)
             
-            # Perform vector search
-            query_string = f"*=>[KNN {top_k} @embedding $query_vector AS score]"
-            query_params = {"query_vector": query_embedding}
+            # Prepare query
+            query_vector = np.array(query_embedding).astype(np.float32).tobytes()
+            query = "*=>[KNN {} @embedding $vector AS score]".format(top_k)
             
-            # Execute search
+            # Execute query
             results = self.redis.ft(index_name).search(
-                query_string,
-                query_params=query_params
-            ).docs
+                query,
+                query_params={"vector": query_vector}
+            )
             
-            # Format results
-            formatted_results = []
-            for doc in results:
-                formatted_results.append({
-                    "text": doc.content.decode('utf-8') if isinstance(doc.content, bytes) else doc.content,
-                    "score": float(doc.score) if hasattr(doc, 'score') else 1.0,
-                    "id": doc.id
-                })
-                
-            logger.info(f"Found {len(formatted_results)} results for query in project_id={project_id}")
-            return formatted_results
+            return [doc["text"] for doc in results.docs]
             
         except Exception as e:
             logger.error(f"Error searching index {index_name}: {e}")
             return []
+            
+    def check_index_health(self, project_id: str) -> Dict:
+        """Check if the index exists and has documents"""
+        try:
+            index = self.redis.ft(f"rag:{project_id}")
+            info = index.info()
+            return {
+                "exists": True,
+                "num_docs": int(info.get('num_docs', 0)),
+                "index_definition": info
+            }
+        except Exception as e:
+            return {
+                "exists": False,
+                "error": str(e)
+            }
 
-
-# Global indexer instance
-indexer = DocumentVectorIndexer()
+# Global instance
+vector_indexer = DocumentVectorIndexer()

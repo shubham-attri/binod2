@@ -1,16 +1,25 @@
+"""
+Main application file for the Binod AI Assistant backend.
+
+This module sets up the FastAPI application, including routes for chat,
+file ingestion, and document upload. It also configures CORS and initializes
+the necessary components for the application to run.
+"""
+
 from fastapi import FastAPI, WebSocket, Request, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 import logging
-from .websocket_chat import chat_endpoint
-from .vector_indexer import indexer
-import os, tempfile
+from app.websocket_chat import chat_endpoint
+from app.vector_indexer import vector_indexer
+import os
+import tempfile
 from pathlib import Path
-from supabase import create_client, Client 
 from langchain_community.document_loaders import PyPDFLoader, TextLoader, Docx2txtLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from dotenv import load_dotenv
 from storage3.exceptions import StorageApiError
 from typing import List
+from app.shared_resources import supabase
 
 # Load environment variables from .env file
 load_dotenv()
@@ -22,10 +31,6 @@ logger = logging.getLogger(__name__)
 # Initialize FastAPI app
 app = FastAPI()
 
-# Initialize Supabase client
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY")
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # Configure CORS for frontend access
 app.add_middleware(
@@ -61,7 +66,7 @@ async def ingest_documents(request: Request):
     if not project_id or not text:
         raise HTTPException(status_code=400, detail="project_id and text are required")
     logger.info(f"Received ingestion request: project_id={project_id}, text_length={len(text)}")
-    count = indexer.ingest(project_id, text)
+    count = vector_indexer.ingest(project_id, text)
     logger.info(f"Indexed {count} chunks for project_id={project_id}")
     return {"ingested_chunks": count}
 
@@ -93,7 +98,7 @@ async def upload_document(conversation_id: str = Form(...), file: UploadFile = F
     logger.info(f"Split document into {len(docs)} chunks")
     # Index text chunks via shared vector_indexer
     text_chunks = [doc.page_content for doc in docs]
-    count = indexer.ingest_chunks(conversation_id, text_chunks)
+    count = vector_indexer.ingest_chunks(conversation_id, text_chunks)
     logger.info(f"Indexed {count} chunks for conversation {conversation_id}")
     # Cleanup temp file
     os.remove(tmp_path)
@@ -115,12 +120,16 @@ async def upload_document(conversation_id: str = Form(...), file: UploadFile = F
     # get_public_url returns a direct URL string
     public_url = bucket.get_public_url(path)
     logger.info(f"Uploaded file to Supabase: {public_url}")
-    # Persist metadata
-    supabase.table("documents").insert({
-        "conversation_id": conversation_id,
-        "file_name": file.filename,
-        "file_url": public_url,
-        "file_type": file.content_type,
-        "ingested_chunks": len(docs)
-    }).execute()
-    return {"file_url": public_url, "ingested_chunks": len(docs)}
+    # Store metadata in Supabase
+    try:
+        supabase.table("documents").insert({
+            "conversation_id": conversation_id,
+            "filename": file.filename,
+            "content_type": file.content_type,
+            "chunk_count": count,
+            "size_bytes": len(contents)
+        }).execute()
+    except Exception as e:
+        logger.error(f"Failed to store document metadata: {e}")
+        # Don't fail the request if metadata storage fails
+    return {"status": "success", "chunks_indexed": count, "conversation_id": conversation_id}
