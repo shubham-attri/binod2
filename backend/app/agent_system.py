@@ -1,5 +1,5 @@
 """
-Enhanced Agent System with RAG and Conversation History
+Enhanced Agent System with RAG and Conversation History using Redis
 """
 from typing import List, Dict, Any, Optional, TypedDict
 import logging
@@ -8,6 +8,7 @@ from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from langgraph.graph import StateGraph, END
 from app.llm_client import llm
 from app.vector_indexer import vector_indexer
+from app.shared_resources import redis_client
 import uuid
 import json
 
@@ -26,9 +27,6 @@ Context:
 
 User's question: {question}"""
 
-# In-memory conversation storage (replace with Redis in production)
-conversation_store = {}
-
 class AgentState(TypedDict):
     """State for our agent workflow"""
     messages: List[Dict[str, str]]
@@ -45,35 +43,52 @@ def log_step(state: AgentState, step: str) -> AgentState:
     return state
 
 def get_conversation_history(thread_id: str) -> List[Dict[str, str]]:
-    """Get conversation history for a thread"""
-    return conversation_store.get(thread_id, [])
+    """Get conversation history for a thread from Redis"""
+    try:
+        history = redis_client.get(f"conversation:{thread_id}")
+        return json.loads(history) if history else []
+    except Exception as e:
+        logger.error(f"Error getting conversation history: {e}")
+        return []
 
 def update_conversation_history(thread_id: str, role: str, content: str):
-    """Update conversation history for a thread"""
-    if thread_id not in conversation_store:
-        conversation_store[thread_id] = []
-    
-    # Keep only the last 20 messages to prevent context window issues
-    if len(conversation_store[thread_id]) >= 20:
-        conversation_store[thread_id] = conversation_store[thread_id][-19:]
-    
-    conversation_store[thread_id].append({
-        "role": role,
-        "content": content,
-        "timestamp": datetime.now().isoformat()
-    })
+    """Update conversation history in Redis"""
+    try:
+        history = get_conversation_history(thread_id)
+        
+        # Add new message
+        history.append({
+            "role": role,
+            "content": content,
+            "timestamp": datetime.now().isoformat()
+        })
+        
+        # Keep only the last 20 messages
+        history = history[-20:]
+        
+        # Save back to Redis
+        redis_client.set(f"conversation:{thread_id}", json.dumps(history))
+        
+    except Exception as e:
+        logger.error(f"Error updating conversation history: {e}")
 
 # Configure logging
 logger = logging.getLogger(__name__)
+
+
+
 
 def retrieve_context(state: AgentState) -> AgentState:
     """Retrieve relevant context using RAG"""
     state = log_step(state, "🔍 Searching knowledge base...")
     
     try:
+        if not state["messages"]:
+            return log_step(state, "⚠️ No messages to process")
+            
         last_message = state["messages"][-1]["content"]
         
-        # First try semantic search
+        # Get relevant chunks from Redis vector store
         chunks = vector_indexer.search_similar_chunks(
             query=last_message,
             project_id="default",
@@ -84,7 +99,6 @@ def retrieve_context(state: AgentState) -> AgentState:
             context = "\n\n".join([f"📄 Chunk {i+1}:\n{chunk}" for i, chunk in enumerate(chunks)])
             state = log_step(state, f"✅ Found {len(chunks)} relevant chunks")
         else:
-            # If no chunks found, try a more general search
             state = log_step(state, "ℹ️ No specific context found, using general knowledge")
             context = "No specific context found in knowledge base. Using general knowledge."
             
@@ -97,21 +111,19 @@ def retrieve_context(state: AgentState) -> AgentState:
         return {**state, "context": "Error retrieving context. Using general knowledge."}
 
 def generate_response(state: AgentState) -> AgentState:
-    """Generate response using LLM with context"""
+    """Generate response using LLM with context and history"""
     state = log_step(state, "🧠 Generating response...")
     
     try:
+        if not state["messages"]:
+            return log_step(state, "⚠️ No messages to process")
+            
         last_message = state["messages"][-1]
-        
-        # Limit history to last 5 messages to manage context length
-        history = state.get("history", "")
-        if len(history) > 2000:  # Rough estimate to keep context manageable
-            history = history[-2000:]
         
         # Prepare the prompt with context and history
         prompt = SYSTEM_PROMPT.format(
             context=state.get("context", "No specific context available."),
-            history=history,
+            history=state.get("history", "No conversation history."),
             question=last_message["content"]
         )
         
@@ -142,54 +154,6 @@ def generate_response(state: AgentState) -> AgentState:
                 "content": "I encountered an error. Let me try that again."
             }]
         }
-
-def retrieve_context(state: AgentState) -> AgentState:
-    """Retrieve relevant context using RAG"""
-    if not state["messages"]:
-        return state
-        
-    last_message = state["messages"][-1]["content"]
-    # Get relevant chunks from Redis vector store
-    try:
-        chunks = vector_indexer.search_similar_chunks(
-            query=last_message,
-            project_id="default",
-            top_k=3
-        )
-        return {**state, "context": "\n\n".join(chunks) if chunks else "No relevant context found"}
-    except Exception as e:
-        logger.error(f"Error retrieving context: {e}")
-        return {**state, "context": "Error retrieving context"}
-
-def generate_response(state: AgentState) -> AgentState:
-    """Generate response using LLM with context"""
-    messages = state["messages"].copy()
-    
-    # Add system message with context
-    if state.get("context"):
-        system_msg = {
-            "role": "system",
-            "content": f"Use this context to answer the question:\n{state['context']}"
-        }
-        messages.insert(0, system_msg)
-    
-    # Convert to LangChain messages
-    lc_messages = []
-    for msg in messages:
-        if msg["role"] == "user":
-            lc_messages.append(HumanMessage(content=msg["content"]))
-        elif msg["role"] == "assistant":
-            lc_messages.append(AIMessage(content=msg["content"]))
-        elif msg["role"] == "system":
-            lc_messages.append(SystemMessage(content=msg["content"]))
-    
-    # Get response from LLM
-    response = llm.invoke(lc_messages)
-    
-    return {
-        **state,
-        "messages": [*state["messages"], {"role": "assistant", "content": response.content}]
-    }
 
 # Define the agent nodes
 def create_agent_workflow():
@@ -300,3 +264,75 @@ def create_conversation_thread() -> str:
     thread_id = str(uuid.uuid4())
     logger.info(f"Created new conversation thread: {thread_id}")
     return thread_id
+# Update the SYSTEM_PROMPT
+SYSTEM_PROMPT = """You are a helpful AI assistant. Use the following context to answer the question when relevant.
+If the question is a general knowledge question or a creative request (like writing a poem), you can respond directly without needing context.
+
+Current conversation history:
+{history}
+
+Relevant context:
+{context}
+
+User's question: {question}"""
+
+# Then update the generate_response function to handle different types of queries
+def generate_response(state: AgentState) -> AgentState:
+    """Generate response using LLM with context and history"""
+    state = log_step(state, "🧠 Generating response...")
+    
+    try:
+        if not state["messages"]:
+            return log_step(state, "⚠️ No messages to process")
+            
+        last_message = state["messages"][-1]
+        user_query = last_message["content"].lower().strip()
+        
+        # Check if this is a general knowledge or creative request
+        is_general_knowledge = any(phrase in user_query for phrase in [
+            "what is", "who is", "when was", "explain", "tell me about",
+            "write a", "create a", "make a", "poem", "story", "joke"
+        ])
+        
+        # Prepare the prompt based on query type
+        if is_general_knowledge or not state.get("context"):
+            # For general knowledge or when no context is available
+            prompt = f"""You are a helpful AI assistant. 
+            {last_message['content']}"""
+            
+            messages = [HumanMessage(content=prompt)]
+            state = log_step(state, "ℹ️ Handling general knowledge/creative request")
+        else:
+            # For context-based queries
+            prompt = SYSTEM_PROMPT.format(
+                context=state.get("context", "No specific context available."),
+                history=state.get("history", "No conversation history."),
+                question=last_message["content"]
+            )
+            messages = [
+                SystemMessage(content=prompt),
+                HumanMessage(content=last_message["content"])
+            ]
+            state = log_step(state, "ℹ️ Using context for response")
+        
+        # Generate response
+        response = llm.invoke(messages)
+        state = log_step(state, "✅ Response generated")
+        
+        # Add assistant's response to messages
+        return {
+            **state,
+            "messages": [*state["messages"], {"role": "assistant", "content": response.content}]
+        }
+        
+    except Exception as e:
+        error_msg = f"Error generating response: {str(e)}"
+        logger.error(error_msg)
+        state = log_step(state, f"❌ {error_msg}")
+        return {
+            **state,
+            "messages": [*state["messages"], {
+                "role": "assistant", 
+                "content": "I encountered an error. Let me try that again."
+            }]
+        }
