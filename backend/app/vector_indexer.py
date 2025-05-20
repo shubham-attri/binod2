@@ -109,6 +109,22 @@ class DocumentVectorIndexer:
         except Exception as e:
             logger.error(f"Error searching index {index_name}: {e}")
             return []
+            
+    def check_index_health(self, project_id: str) -> Dict:
+        """Check if the index exists and has documents"""
+        try:
+            index = self.redis.ft(f"rag:{project_id}")
+            info = index.info()
+            return {
+                "exists": True,
+                "num_docs": int(info.get('num_docs', 0)),
+                "index_definition": info
+            }
+        except Exception as e:
+            return {
+                "exists": False,
+                "error": str(e)
+            }
 
 # Global instance
 vector_indexer = DocumentVectorIndexer()
